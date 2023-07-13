@@ -1,0 +1,2931 @@
+---
+title: "Quote Data vs. Exposure & Loss Ratios - 3 years look back"
+date: "2023-04-21"
+output:
+  word_document: 
+    reference_docx: report_word_style.docx
+  html_document: default
+  pdf_document: default
+---
+
+# Intro
+
+xyz
+
+# Data
+
+xyz
+
+# Navigation
+
+xyz
+
+# Analysis
+
+xyz
+
+# Conclusion
+
+xyz
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(openxlsx)
+library(tidyverse)
+library(DBI)
+library(dplyr)
+library(dbplyr)
+library(ggplot2)
+library(tidyverse)
+library(odbc)
+library(lubridate)
+library(tidyr)
+library(knitr)
+library(patchwork)
+```
+
+```{r}
+sql06 <- dbConnect(odbc(),
+                       Driver = "SQL Server",
+                       Server = "xx1",
+                       Database = "Auto_Adhoc")
+sql06x <- dbConnect(odbc(),
+                       Driver = "SQL Server",
+                       Server = "xx2",
+                       Database = "Auto_Experience")
+```
+
+
+```{r get_conversion_tbl}
+conversion_dat <- read.xlsx("I:/0.NEW/Other tasks/Shopper_DB/2023_04_14_study/Data_Definition_for_reports.xlsx",sheet="Conversion") %>% 
+  mutate_at(vars(From2),as.character)
+```
+
+
+```{r get_OLEP_CW_data, results="hide"}
+#get OLEP data for all the variables; this will bring vast amount of data in R and could cause memory issue
+#tested this time and it's ok to pull OLEP data in for all the variables below, thus use this way
+#if there's memory issue in the future, can create function to pull in one variable at a time
+olep_cw <- tbl(sql06x,'OLEP_CALC_202212')
+
+
+start_time <- Sys.time()
+
+olep_cw_dat <- olep_cw %>% 
+  filter(RISK_STATE %in% c('AZ','CO','CT','ID','IL','IN','KS','MD','MN','MO','NE','NJ','OH','OR','PA','VA','WA','WY'),
+         VEHICLE_TYPE %in% c('PP','PU','VN')) %>% 
+  filter(CY %in% c(2020,2021,2022),COVERAGE_CD %in% c('BI','PD','CMP','COL','MP','UMB','UIM')) %>%
+  mutate(INC_LOSS_DCC=INC_LOSS+INC_DCC) %>% 
+  select(RISK_ST=RISK_STATE,COVERAGE_CD,CY,EX,OLEP,INC_LOSS_DCC,CAPPED_INC_LOSS_DCC,EP
+#Policy level
+,Number_Of_Rater_Drivers = NBR_OF_DRIVERS
+,Number_Of_Vehicles = NBR_VEHICLES
+,Number_Of_Rated_Vehicles = NBR_VEHICLES
+,Pol_Has_Excess_Vehicle = EXCESS_VEH_IND
+,No_Of_Chargeable_Accidents = NBR_CHG_ACC_HH_NPD
+,No_Of_Major_Incidents = NBR_MAJ_HH_NPD
+,No_Of_Minor_Incidents = NBR_MIN_HH_NPD
+,Minimum_Years_Licensed = MIN_YEARS_LIC
+,Age_Of_PNI = DRIVER_AGE
+,Rated_Driver_Age = DRIVER_AGE_OPRT
+,Driver_Max_Age = MAX_AGE
+,Gender_Of_PNI = SEX
+,Rated_Marital_Status = MARITAL_STATUS
+,Marital_Status_Of_PNI = MARITAL_STATUS
+,Rate_Level = GROUP_RATE_LEVEL_CODE
+,Persistency = RTNG_PERSISTENCY_MONTHS
+,Residence_Type = RESIDENCE_TYPE
+,PaperLess = EDOC_DISC
+,Payment_Plan = PAYPLAN
+,AutoHome_Discount = AUTO_HOME_DISCOUNT
+,Insurance_Score = FULL_CREDIT_SCORE
+,GoldStar_Level = GOLD_STAR_RATE_LEVEL
+,NewBusiness_Discount_Level = NEW_POL_DISC_LEVEL
+,Package_Discount = PKG_DISC_IND
+,PRIOR_POL_BI_LMT1 = RTNG_PRIOR_BI_CLAIMANT_LIMIT
+,PRIOR_POL_BI_LMT2 = RTNG_PRIOR_BI_CLAIM_LIMIT
+,BI_Limit = COVERAGE_LIMIT
+,PD_Limit = COVERAGE_LIMIT
+,MED_Limit = COVERAGE_LIMIT
+,UMB_Limit = COVERAGE_LIMIT
+,UIM_Limit = COVERAGE_LIMIT
+,Loyalty_Years = LOYALTY_YEARS
+#Vehicle level
+,Vehicle_Make = MAKE_DESC
+,Annual_Mileage = ANNUAL_MILES
+,Model_Year = MODEL_YEAR
+,ISO_Symbol = SYMBOL
+,PI_PD_Symbol = BI_PD_LIA_SYM
+,PIP_MED_Symbol = PIP_MED_PMT_SYM
+,COMP_Symbol = COMP_SYMBOL
+,COLL_Symbol = COLL_SYMBOL
+,COMP_Deductible = COVERAGE_LIMIT
+,COLL_Deductible = COVERAGE_LIMIT
+,VHS = VEH_HIST_SCORE
+         ) %>% 
+  # unite(Prior_BI_Limit,c('PRIOR_POL_BI_LMT1','PRIOR_POL_BI_LMT2'),sep = "/") %>% #can't do unite here if using dbplyr
+  # head() %>% #for checking
+  collect()
+
+end_time <- Sys.time()
+end_time - start_time
+```
+
+```{r get_OLEP_CA_data,results="hide"}
+#get OLEP CA data for all the variables; this will bring vast amount of data in R and could cause memory issue
+olep_ca <- tbl(sql06x,'OLEP_CALC_CA_202212')
+
+
+start_time <- Sys.time()
+
+olep_ca_dat <- olep_ca %>% 
+  filter(VEHICLE_TYPE %in% c('PP','PU','VN')) %>% 
+  filter(CY %in% c(2020,2021,2022),COVERAGE_CD %in% c('BI','PD','CMP','COL','MP','UMB','UIM')) %>%
+  mutate(INC_LOSS_DCC=INC_LOSS+INC_DCC) %>% 
+  select(RISK_ST=RISK_STATE,COVERAGE_CD,CY,EX,OLEP,INC_LOSS_DCC,CAPPED_INC_LOSS_DCC,EP
+#Policy level
+,Number_Of_Rater_Drivers = RTNG_NBR_OF_DRIVERS
+,Number_Of_Vehicles = RTNG_NBR_VEHICLES
+,Number_Of_Rated_Vehicles = RTNG_NBR_VEHICLES
+,Pol_Has_Excess_Vehicle = EXCESS_VEH_IND
+# ,No_Of_Chargeable_Accidents = ''
+# ,No_Of_Major_Incidents = ''
+# ,No_Of_Minor_Incidents = ''
+# ,Minimum_Years_Licensed = ''
+,Age_Of_PNI = DRIVER_AGE
+,Rated_Driver_Age = DRIVER_AGE_OPRT
+# ,Driver_Max_Age = ''
+,Gender_Of_PNI = SEX
+,Rated_Marital_Status = MARITAL_STATUS
+,Marital_Status_Of_PNI = MARITAL_STATUS
+,Rate_Level = GROUP_RATE_LEVEL_CODE
+,Persistency = RTNG_PERSISTENCY_MONTHS
+# ,Residence_Type = ''
+# ,PaperLess = ''
+,Payment_Plan = PAYPLAN
+,AutoHome_Discount = AUTO_HOME_DISCOUNT
+# ,Insurance_Score = ''
+,GoldStar_Level = GOLD_STAR_RATE_LEVEL
+# ,NewBusiness_Discount_Level = ''
+,Package_Discount = PKG_DISC_IND
+# ,PRIOR_POL_BI_LMT1 = ''
+# ,PRIOR_POL_BI_LMT2 = ''
+,BI_Limit = COVERAGE_LIMIT
+,PD_Limit = COVERAGE_LIMIT
+,MED_Limit = COVERAGE_LIMIT
+,UMB_Limit = COVERAGE_LIMIT
+,UIM_Limit = COVERAGE_LIMIT
+# ,Loyalty_Years = ''
+#Vehicle level
+,Vehicle_Make = MAKE_DESC
+,Annual_Mileage = ANNUAL_MILES
+,Model_Year = MODEL_YEAR
+,ISO_Symbol = SYMBOL
+,PI_PD_Symbol = BI_PD_LIA_SYM
+,PIP_MED_Symbol = PIP_MED_PMT_SYM
+,COMP_Symbol = COMP_SYMBOL
+,COLL_Symbol = COLL_SYMBOL
+,COMP_Deductible = COVERAGE_LIMIT
+,COLL_Deductible = COVERAGE_LIMIT
+# ,VHS = VEH_HIST_SCORE #olep_ca has this column but has only null & 5, thus not pulling in for now
+         ) %>% 
+  collect()
+
+end_time <- Sys.time()
+end_time - start_time
+```
+
+```{r create_CA_CW_OLEP_dat}
+
+olep_dat0 <- olep_ca_dat %>% mutate(CA_nonCA="CA") %>% 
+  bind_rows(olep_cw_dat %>% mutate(CA_nonCA="CW")) 
+
+olep_dat1 <- olep_dat0 %>% 
+  mutate_at(c("Number_Of_Rater_Drivers","Number_Of_Vehicles","Number_Of_Rated_Vehicles" #these 3 already int type, don't really need to
+              ,'Persistency',"Insurance_Score",
+              'No_Of_Chargeable_Accidents','No_Of_Major_Incidents','No_Of_Minor_Incidents',
+              'Minimum_Years_Licensed','Driver_Max_Age','Age_Of_PNI','Rated_Driver_Age',
+              'Model_Year','COMP_Symbol','COLL_Symbol','COMP_Deductible','COLL_Deductible'
+              ),
+            as.numeric) %>% 
+  # mutate_at(c('PRIOR_POL_BI_LMT1','PRIOR_POL_BI_LMT2'),as.character(as.numeric())) %>% 
+  # mutate(PRIOR_POL_BI_LMT1=round(PRIOR_POL_BI_LMT1,0),PRIOR_POL_BI_LMT2=round(PRIOR_POL_BI_LMT2,0)) %>% 
+  # unite(`Current_Carrier_BI_Limit`,c('PRIOR_POL_BI_LMT1','PRIOR_POL_BI_LMT2'),sep = "/") %>%
+  mutate(TimePeriods=case_when(CY==2022~"CurrentYear",TRUE~"Previous2Years")) 
+
+olep_dat_um <- olep_dat1 %>% filter(COVERAGE_CD %in% c('MP','UMB','UIM'))
+olep_dat1 <- olep_dat1 %>% filter(COVERAGE_CD %in% c('BI','PD','CMP','COL'))
+
+olep_dat <- olep_dat1 %>% 
+  left_join(conversion_dat %>% filter(Type=="InsScore") %>% mutate_at(vars(From1),as.numeric) %>% select(-Type,-From2,IS_grp=To),
+            by=c('Insurance_Score'='From1')) %>% 
+  # left_join(conversion_dat %>% filter(Type=='MAKE') %>% select(-Type,-From2,Veh_Make_grp=To),
+  #           by=c('Vehicle_Make'='From1')) %>% #will need to break the make description from olep first b4 using this
+  left_join(conversion_dat %>% filter(Type=="Pay Plan") %>% select(-Type,-From2,PaymentPlan=To),
+            by=c("Payment_Plan"="From1")) %>% 
+  left_join(conversion_dat %>% filter(Type=="RateLevel") %>% select(-Type,-From2,RateLevel_grp=To),
+            by=c("Rate_Level"='From1')) %>% 
+  left_join(conversion_dat %>% filter(Type=="Prior_BI_Limit_olep") %>%  mutate_at(c("From1","From2"),as.numeric) %>%
+              select(-Type,Current_Carrier_BI_Limit=To),
+            by=c("PRIOR_POL_BI_LMT1"="From1","PRIOR_POL_BI_LMT2"="From2")) %>% 
+  # left_join(conversion_dat %>% filter(Type=="Carrier1") %>% select(-Type,-From2,Current_Carrier_grp2=To),
+  #           by=c('LN_Current_Carrier'='From1')) %>% #OLEP data doesn't have this field
+  mutate(Min_Yrs_Licensed_grp=cut(Minimum_Years_Licensed,
+                                  breaks=c(0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,max(olep_dat1$Minimum_Years_Licensed,na.rm = TRUE)),
+                                  include.lowest=TRUE),
+         Drv_Max_Age_grp=cut(Driver_Max_Age,
+                             breaks=c(min(olep_dat1$Driver_Max_Age,na.rm=TRUE),20,seq(25,90,5),max(olep_dat1$Driver_Max_Age,na.rm = TRUE)),
+                             include.lowest=TRUE),
+         PNI_Age_grp=cut(Age_Of_PNI,
+                         breaks=c(min(olep_dat1$Age_Of_PNI,na.rm=TRUE),20,seq(25,90,5),max(olep_dat1$Age_Of_PNI,na.rm=TRUE)),
+                         include.lowest=TRUE),
+         Rated_Drv_Age_grp=cut(Rated_Driver_Age,
+                               breaks=c(min(olep_dat1$Rated_Driver_Age,na.rm=TRUE),20,seq(25,90,5),max(olep_dat1$Rated_Driver_Age,na.rm=TRUE)),
+                               include.lowest=TRUE),         
+         # Annual_Mileage=if_else(as.numeric(Annual_Mileage)>=20000,'20000',Annual_Mileage),
+         AnnualMileage_grp=case_when(Annual_Mileage=="50000Plus"~20000,
+                                     as.numeric(Annual_Mileage)>20000~20000,
+                                     TRUE~as.numeric(Annual_Mileage)),
+         ModelYr_grp=if_else(Model_Year<2000,"<2000",as.character(Model_Year)),
+         Persistency_grp=case_when(Persistency<12~0,
+                                   Persistency<24~12,
+                                   Persistency<36~24,
+                                   Persistency<48~36,
+                                   Persistency<60~48,
+                                   Persistency<72~60,
+                                   Persistency<84~72,
+                                   Persistency<96~84,
+                                   Persistency<108~96,
+                                   Persistency<120~108,
+                                   TRUE~120
+                                   ),
+         VHS_grp=case_when(
+                          VHS>=932~932,
+                          VHS>=865~865,
+                          VHS>=852~852,
+                          VHS>=838~838,
+                          VHS>=815~815,
+                          VHS>=791~791,
+                          VHS>=768~768,
+                          VHS>=745~745,
+                          VHS>=713~713,
+                          VHS>=680~680,
+                          VHS>=635~635,
+                          VHS>=590~590,
+                          VHS>=531~531,
+                          VHS>=472~472,
+                          VHS>=390~390,
+                          VHS>=307~307,
+                          VHS>=245~245,
+                          VHS>=183~183,
+                          VHS>=102~102,
+                          VHS>=20~20,
+                          VHS<20~0),
+         Number_Of_Rater_Drivers=case_when(Number_Of_Rater_Drivers>4~5,TRUE~Number_Of_Rater_Drivers),
+         Number_Of_Rated_Vehicles=case_when(Number_Of_Rated_Vehicles>4~5,TRUE~Number_Of_Rated_Vehicles),
+         Number_Of_Vehicles=case_when(Number_Of_Vehicles>4~5,TRUE~Number_Of_Vehicles),
+         No_Of_Chargeable_Accidents=case_when(No_Of_Chargeable_Accidents>=3~3,TRUE~No_Of_Chargeable_Accidents),
+         No_Of_Major_Incidents=case_when(No_Of_Major_Incidents>=3~3,TRUE~No_Of_Major_Incidents),
+         No_Of_Minor_Incidents=case_when(No_Of_Minor_Incidents>=3~3,TRUE~No_Of_Minor_Incidents)
+         ) %>% 
+  # mutate_at(c("Number_Of_Rater_Drivers","Number_Of_Vehicles","Number_Of_Rated_Vehicles","COMP_Deductible","COLL_Deductible","Persistency_grp",'AnnualMileage_grp'),as.factor) %>% 
+  # mutate_at(vars("No_Of_Chargeable_Accidents","No_Of_Major_Incidents"), ~replace_na(.,0)) %>% 
+  # mutate_at(vars("PaymentPlan","Current_Carrier_grp2","Veh_Make_grp"),~replace_na(.,"Unknown")) %>% 
+  mutate(AutoHome_Discount=case_when(AutoHome_Discount==" "~"No",AutoHome_Discount=="N"~"No",TRUE~AutoHome_Discount))
+
+olep_dat$Current_Carrier_BI_Limit <- recode_factor(olep_dat$Current_Carrier_BI_Limit,`10/10`="15/30",`10/20`="15/30",`15/30`="15/30",
+                                              `20/40`="25/50",`25/50`="25/50",
+                                              `30/60`="30/60",`30/65`="30/60", `50/100`="50/100",
+                                              `100/300`="100/300",
+                                              `250/500`="250/500",
+                                              `300/500`="300/500",
+                                              `500/500`="500/500",
+                                              `500/1000`="500/1M",`500/1M`="500/1M",
+                                              `1000/1000`="1M/1M",`1M/1M`="1M/1M")
+
+#recode to put & regroup lim/ded in the wanted order. Note: these columns were taken from COVERAGE_LIMIT column thus it will contain other values from other coverages. When recoding, those not in the list will be converted to NA which is also same as records with blank value. This is ok, since later on, will filter only the rows by coverage wanted to graph
+
+olep_dat$BI_Limit <- recode_factor(olep_dat$BI_Limit,`10`="15/30",`10-20`="15/30",`15-30`="15/30",
+                                              `20-40`="25/50",`25-50`="25/50",
+                                              `30-60`="30/60",`30-65`="30/60", 
+                                              `50-100`="50/100",
+                                              `100-300`="100/300",
+                                              `250-500`="250/500",
+                                              `300-500`="300/500",
+                                              `500-500`="500/500",
+                                              `500-1000`="500/1M",`500-1M`="500/1M",
+                                              `1000-1000`="1M/1M",`1M-1M`="1M/1M")
+
+
+
+olep_dat$PD_Limit <- recode_factor(olep_dat$PD_Limit,
+                                  `5`=5,
+                                  `10`=10,
+                                  `15`=15,
+                                  `20`=20,
+                                  `25`=25,
+                                  `40`=40,
+                                  `50`=50,
+                                  `100`=100,
+                                  `200`=200,
+                                  `300`=300
+                                   )
+
+
+olep_dat$COMP_Deductible <- recode_factor(olep_dat$COMP_Deductible,
+                                  `0`=0,
+                                  `50`=50,
+                                  `100`=100,
+                                  `150`=150,
+                                  `250`=250,
+                                  `500`=500,
+                                  `750`=750,
+                                  `1000`=1000,
+                                  `1500`=1500,
+                                  `2000`=2000,
+                                  `2500`=2500,
+                                  `3000`=3000
+                                          )
+
+olep_dat$COLL_Deductible <- recode_factor(olep_dat$COLL_Deductible,
+                                  `50`=50,
+                                  `100`=100,
+                                  `150`=150,
+                                  `200`=200,
+                                  `250`=250,
+                                  `500`=500,
+                                  `750`=750,
+                                  `1000`=1000,
+                                  `1500`=1500,
+                                  `2000`=2000,
+                                  `2500`=2500,
+                                  `3000`=3000
+                                          )
+
+olep_dat$RateLevel_grp <- recode_factor(olep_dat$RateLevel_grp,"OTHER"="OTHER",
+                                   "UNITED"="UNITED",
+                                   "NURSE"="NURSE",
+                                   "PUBLIC_SAFETY"="PUBLIC_SAFETY",
+                                   "FIREFIGHTER"="FIREFIGHTER",
+                                   "HIGHWAY_PATROL"="HIGHWAY_PATROL",
+                                   "EDU_OTHER"="EDU_OTHER",
+                                   "HE"="HE",
+                                   "CTA/NEA"="CTA/NEA")
+
+
+olep_dat_um$MED_Limit <- recode_factor(olep_dat_um$MED_Limit,
+                                  `0`="0",
+                                  `1`="1K",
+                                  `2`="2K",
+                                  `2.5`="2.5K",
+                                  `5`="5K",
+                                  `10`="10K",
+                                  `25`="25K",
+                                  `50`="50K",
+                                  `100`="100K",
+                                  `100EM`="100K"
+                                   )
+
+olep_dat_um$UMB_Limit <- recode_factor(olep_dat_um$UMB_Limit,`15E30`="15/30",`10-20`="15/30",`15-30`="15/30",
+                                              `20-40`="25/50",`20-50`="25/50",`25-50`="25/50",`25E50`="25/50",`25N50`="25/50",`25R50`="25/50",
+                                              `30-60`="30/60",`30-65`="30/60",`30E60`="30/60",`30N60`="30/60",`30R60`="30/60",
+                                              `50-100`="50/100",`50E100`="50/100",`50N100`="50/100",`50R100`="50/100",
+                                              `100-200`="100/300",`100-300`="100/300",`100E300`="100/300",`100N300`="100/300",`100R300`="100/300",
+                                              `200-600`="250/500",`250-500`="250/500",`250E500`="250/500",`250N500`="250/500",`250R500`="250/500",
+                                              `300-500`="300/500",`300N500`="300/500",
+                                              `500-500`="500/500",`500N500`="500/500",`500R500`="500/500",
+                                              `500-1000`="500/1M",`500E1M`="500/1M",`600-1000`="500/1M",`600-1M`="500/1M",
+                                              `1000-1000`="1M/1M",`1M-1M`="1M/1M")
+
+olep_dat_um$UIM_Limit <- recode_factor(olep_dat_um$UIM_Limit,`10`="15/30",`10-20`="15/30",`15-30`="15/30",
+                                              `20-40`="25/50",`25-50`="25/50",`50-50`="25/50",
+                                              `30-60`="30/60",`30-65`="30/60", 
+                                              `50-100`="50/100",
+                                              `100-300`="100/300",
+                                              `250-500`="250/500",
+                                              `300-500`="300/500",
+                                              `500-500`="500/500",
+                                              `500-1000`="500/1M",`500-1M`="500/1M",
+                                              `1000-1000`="1M/1M",`1M-1M`="1M/1M")
+
+```
+
+
+```{r get_Quote_data,results="hide"}
+
+start_time <- Sys.time()
+
+quote_DB_file <- "select CA_nonCA=case when RISK_ST = 'CA' then 'CA' else 'CW' end
+  ,Record_Type = case when [SF_STATUSNAME] = 'Sold Issued' then 'Sold' else 'Unsold' end
+  ,RISK_ST
+  
+--#Policy level
+,Number_Of_Rater_Drivers = NO_OF_RATED_DRIVER
+,Number_Of_Vehicles = NO_OF_POLICY_VEHICLES
+,Number_Of_Rated_Vehicles = NO_OF_RATED_VEHICLES
+,Pol_Has_Excess_Vehicle = EXCESS_VEHICLE
+,No_Of_Chargeable_Accidents = NO_OF_CHARGEABLE_ACCIDENTS
+,No_Of_Major_Incidents = NO_OF_MAJOR_INCIDENTS
+,No_Of_Minor_Incidents = NO_OF_MINOR_INCIDENTS
+,Minimum_Years_Licensed = MIN_YRS_LICENSED
+,Age_Of_PNI = AGE
+,Rated_Driver_Age = RATED_DRV_AGE
+,Driver_Max_Age = DRIVER_MAX_AGE
+,Gender_Of_PNI = GENDER
+,Rated_Marital_Status = RATED_MARITAL_ST
+,Marital_Status_Of_PNI = MARITAL_ST
+,Rate_Level = RATE_LEVEL
+,Persistency = PERSISTENCY
+,Residence_Type = RESIDENCE_TYPE
+,PaperLess = PAPERLESS_IND
+,Payment_Plan = PAY_PLAN
+,AutoHome_Discount = AUTO_HOME_DISCOUNT_IND
+,Insurance_Score = INSURANCE_SCORE
+,GoldStar_Level = GOLD_STAR_LVL
+,NewBusiness_Discount_Level = NPD_LEVEL
+,Package_Discount = PACKAGE_DISCOUNT
+,PRIOR_POL_BI_LMT1 = PRIOR_POL_BI_LMT1
+,PRIOR_POL_BI_LMT2 = PRIOR_POL_BI_LMT2
+,BI_Limit = BI_LIMIT
+,PD_Limit = PD_LIMIT
+,MED_Limit = MP_LIMIT
+,PIP_Limit = PIP_LIMIT
+,UIM_Limit = UIM_LIMIT
+,UMB_Limit = UMB_LIMIT
+,PIP_Deductible = PIPOTH_LIMIT
+,Loyalty_Years = LOYALTY_YEARS
+
+
+--#Vehicle level
+,Vehicle_Make = VEH_MAKE
+,Annual_Mileage = ANNUAL_MILEAGE
+,Model_Year = MODEL_YR
+,ISO_Symbol = ISO_SYMBOL
+,PI_PD_Symbol = BI_PD_SYMBOL
+,PIP_MED_Symbol = PIP_MP_SYMBOL
+,COMP_Symbol = CMP_SYMBOL
+,COLL_Symbol = COL_SYMBOL
+,COMP_Deductible = COMP_DED
+,COLL_Deductible = COLL_DED
+,VHS = RED_MOUNTAIN_VEHICLE__SCORE_RATING
+
+--#Other Variables
+,LapseLevelNO_LAPSE_OF_COVG = NO_LAPSE_OF_COVG
+,Current_Carrier_Input = rtrim(LTRIM(PRIOR_POL_NAME))
+,LN_Current_Carrier = rtrim(LTRIM(carrier1))
+,MLG_CARFAX_ORDERED_IND = MLG_CARFAX_ORDERED_IND
+,MLG_CUST_OVERRIDE = MLG_CUST_OVERRIDE
+,UNIT = UNIT_NO_FOR_AUTO
+,PC_CREATETIME = PC_CREATETIME
+,Number_Of_Drivers_Under26 = NO_OF_YOUTHFUL
+,Number_Of_Drivers_Under21 = NO_OF_YOUTHFUL_UNDER21
+
+
+
+  from [QUOTES].[Auto_Quotes_Limits_PREprocessed]
+  where VEHICLE_TYPE in ('Private Passenger','Pickup','Van')
+  and RISK_ST in ('AZ','CA','CO','CT','ID','IL','IN','KS','MD','MN','MO','NE','NJ','OH','OR','PA','VA','WA','WY')"
+quote_dat0 <- dbGetQuery(sql06, quote_DB_file)
+
+end_time <- Sys.time()
+end_time - start_time
+```
+
+```{r create_Quote_dat}
+  
+quote_dat1 <- quote_dat0 %>% 
+  mutate_at(c("Number_Of_Rater_Drivers","Number_Of_Vehicles","Number_Of_Rated_Vehicles" #these 3 already int type, don't really need to
+              ,'Persistency',"Insurance_Score",
+              'No_Of_Chargeable_Accidents','No_Of_Major_Incidents','No_Of_Minor_Incidents',
+              'Minimum_Years_Licensed','Driver_Max_Age','Age_Of_PNI','Rated_Driver_Age',
+              'Model_Year','COMP_Symbol','COLL_Symbol','COMP_Deductible','COLL_Deductible',
+              'PD_Limit','MED_Limit',
+              'PRIOR_POL_BI_LMT1','PRIOR_POL_BI_LMT2'
+              ,'UNIT','VHS'
+              ),
+            as.numeric) %>% 
+  mutate_at(vars(PC_CREATETIME),as.Date) %>% 
+  # mutate(PRIOR_POL_BI_LMT1=PRIOR_POL_BI_LMT1/1000,PRIOR_POL_BI_LMT2=PRIOR_POL_BI_LMT2/1000) %>% 
+  # unite(`Current_Carrier_BI_Limit`,c('PRIOR_POL_BI_LMT1','PRIOR_POL_BI_LMT2'),sep = "/") %>% 
+  mutate(TimePeriods=case_when(PC_CREATETIME>="2022-04-01"~"CurrentYear",TRUE~"Previous2Years"))
+
+quote_dat1$Annual_Mileage <- gsub(",", "", quote_dat1$Annual_Mileage)
+ 
+
+quote_dat <- quote_dat1 %>% 
+  left_join(conversion_dat %>% filter(Type=="InsScore") %>% mutate_at(vars(From1),as.numeric) %>% select(-Type,-From2,IS_grp=To),
+            by=c('Insurance_Score'='From1')) %>% 
+  left_join(conversion_dat %>% filter(Type=='MAKE') %>% select(-Type,-From2,Veh_Make_grp=To),
+            by=c('Vehicle_Make'='From1')) %>% 
+  left_join(conversion_dat %>% filter(Type=="Pay Plan") %>% select(-Type,-From2,PaymentPlan=To),
+            by=c("Payment_Plan"="From1")) %>% 
+  left_join(conversion_dat %>% filter(Type=="RateLevel") %>% select(-Type,-From2,RateLevel_grp=To),
+            by=c("Rate_Level"='From1')) %>% 
+  left_join(conversion_dat %>% filter(Type=="Prior_BI_Limit_quote") %>%  mutate_at(c("From1","From2"),as.numeric) %>% select(-Type,Current_Carrier_BI_Limit=To),
+            by=c("PRIOR_POL_BI_LMT1"="From1","PRIOR_POL_BI_LMT2"="From2")) %>% 
+  left_join(conversion_dat %>% filter(Type=="Carrier1") %>% select(-Type,-From2,Current_Carrier_grp2=To),
+            by=c('LN_Current_Carrier'='From1')) %>% 
+  mutate(Min_Yrs_Licensed_grp=cut(Minimum_Years_Licensed,
+                                  breaks=c(0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,max(quote_dat1$Minimum_Years_Licensed,na.rm = TRUE)),
+                                  include.lowest=TRUE),
+         Drv_Max_Age_grp=cut(Driver_Max_Age,
+                             breaks=c(min(quote_dat1$Driver_Max_Age,na.rm=TRUE),20,seq(25,90,5),max(quote_dat1$Driver_Max_Age,na.rm = TRUE)),
+                             include.lowest=TRUE),
+         PNI_Age_grp=cut(Age_Of_PNI,
+                         breaks=c(min(quote_dat1$Driver_Max_Age,na.rm=TRUE),20,seq(25,90,5),max(quote_dat1$Age_Of_PNI,na.rm=TRUE)),
+                         include.lowest=TRUE),
+         Rated_Drv_Age_grp=cut(Rated_Driver_Age,
+                               breaks=c(min(quote_dat1$Rated_Driver_Age,na.rm=TRUE),20,seq(25,90,5),max(quote_dat1$Rated_Driver_Age,na.rm=TRUE)),
+                               include.lowest=TRUE),
+         AnnualMileage_grp=case_when(Annual_Mileage=="50,000+"~20000,
+                                     as.numeric(Annual_Mileage)>20000~20000,
+                                     TRUE~as.numeric(Annual_Mileage)),
+         ModelYr_grp=if_else(Model_Year<2000,"<2000",as.character(Model_Year)),
+         Persistency_grp=case_when(Persistency<12~0,
+                                   Persistency<24~12,
+                                   Persistency<36~24,
+                                   Persistency<48~36,
+                                   Persistency<60~48,
+                                   Persistency<72~60,
+                                   Persistency<84~72,
+                                   Persistency<96~84,
+                                   Persistency<108~96,
+                                   Persistency<120~108,
+                                   TRUE~120
+                                   ),
+         VHS_grp=case_when(
+                          VHS>=932~932,
+                          VHS>=865~865,
+                          VHS>=852~852,
+                          VHS>=838~838,
+                          VHS>=815~815,
+                          VHS>=791~791,
+                          VHS>=768~768,
+                          VHS>=745~745,
+                          VHS>=713~713,
+                          VHS>=680~680,
+                          VHS>=635~635,
+                          VHS>=590~590,
+                          VHS>=531~531,
+                          VHS>=472~472,
+                          VHS>=390~390,
+                          VHS>=307~307,
+                          VHS>=245~245,
+                          VHS>=183~183,
+                          VHS>=102~102,
+                          VHS>=20~20,
+                          VHS<20~0
+                           )) %>% 
+  mutate_at(c("Number_Of_Rater_Drivers","Number_Of_Vehicles","Number_Of_Rated_Vehicles",
+              "COMP_Deductible","COLL_Deductible","PD_Limit", #"MED_Limit"
+              "Persistency_grp",'AnnualMileage_grp'),as.factor) %>% 
+  mutate_at(vars("No_Of_Chargeable_Accidents","No_Of_Major_Incidents"), ~replace_na(.,0)) %>% 
+  mutate_at(vars("PaymentPlan","Current_Carrier_grp2","Veh_Make_grp"),~replace_na(.,"Unknown")) %>% 
+  mutate(AutoHome_Discount=case_when(AutoHome_Discount==""~"No",TRUE~AutoHome_Discount))
+
+quote_dat$Current_Carrier_BI_Limit <- recode_factor(quote_dat$Current_Carrier_BI_Limit,`10/10`="15/30",`10/20`="15/30",`15/30`="15/30",
+                                              `20/40`="25/50",`25/50`="25/50",
+                                              `30/60`="30/60",`30/65`="30/60", `50/100`="50/100",
+                                              `100/300`="100/300",
+                                              `250/500`="250/500",
+                                              `300/500`="300/500",
+                                              `500/500`="500/500",
+                                              `500/1000`="500/1M",`500/1M`="500/1M",
+                                              `1000/1000`="1M/1M",`1M/1M`="1M/1M")
+
+#this method is not working in this case
+# quote_dat <- quote_dat %>% mutate_at("Current_Carrier_BI_Limit",factor(levels = c("15/30","25/50","30/60","50/100","100/300",
+#                                                                                 "250/500","300/500","500/500","500/1M","1M/1M",NA)))
+
+quote_dat$BI_Limit <- recode_factor(quote_dat$BI_Limit,`10/10`="15/30",`10/20`="15/30",`15/30`="15/30",
+                                              `20/40`="25/50",`25/50`="25/50",
+                                              `30/60`="30/60",`30/65`="30/60", 
+                                              `50/100`="50/100",`60/120`="50/100",
+                                              `100/300`="100/300",
+                                              `250/500`="250/500",
+                                              `300/500`="300/500",
+                                              `500/500`="500/500",
+                                              `500/1000`="500/1M",`500/1M`="500/1M",
+                                              `1000/1000`="1M/1M",`1M/1M`="1M/1M")
+
+quote_dat$UMB_Limit <- recode_factor(quote_dat$UMB_Limit,`10/10`="15/30",`10/20`="15/30",`15/30`="15/30",
+                                              `20/40`="25/50",`25/50`="25/50",
+                                              `30/60`="30/60",`30/65`="30/60", 
+                                              `50/100`="50/100",`60/120`="50/100",`40/80`="50/100",
+                                              `100/300`="100/300",`100/200`="100/300",
+                                              `250/500`="250/500",`200/600`="250/500",
+                                              `300/500`="300/500",
+                                              `500/500`="500/500",
+                                              `500/1000`="500/1M",`500/1M`="500/1M",
+                                              `1000/1000`="1M/1M",`1M/1M`="1M/1M")
+
+quote_dat$UIM_Limit <- recode_factor(quote_dat$UIM_Limit,`10/10`="15/30",`10/20`="15/30",`15/30`="15/30",
+                                              `20/40`="25/50",`25/50`="25/50",
+                                              `30/60`="30/60",`30/65`="30/60", 
+                                              `50/100`="50/100",`60/120`="50/100",`40/80`="50/100",`50/50`="50/100",
+                                              `100/300`="100/300",`100/200`="100/300",
+                                              `250/500`="250/500",`200/600`="250/500",
+                                              `300/500`="300/500",
+                                              `500/500`="500/500",
+                                              `500/1000`="500/1M",`500/1M`="500/1M",
+                                              `1000/1000`="1M/1M",`1M/1M`="1M/1M")
+
+#Don't need to recode for PD, Med, Cmp & Coll since already converted to numeric then factor in previous step
+# quote_dat$PD_Limit <- recode_factor(quote_dat$PD_Limit,
+#                                     5=5,
+#                                     10=10,
+#                                     15=15,
+#                                     20=20,
+#                                     25=25,
+#                                     40=40,
+#                                     50=50,
+#                                     100=100,
+#                                     200=200,
+#                                     300=300
+#                                     )
+#recode for Med because if not it will change 100000 to 1e+05 automatically when apply as factor
+quote_dat$MED_Limit <- recode_factor(quote_dat$MED_Limit,
+                                      `1000`="1K",
+                                      `2000`="2K",
+                                      `5000`="5K",
+                                      `10000`="10K",
+                                      `25000`="25K",
+                                      `50000`="50K",
+                                      `100000`="100K"
+                                     )
+
+# quote_dat$COMP_Deductible <- recode_factor(quote_dat$COMP_Deductible,
+#                                           0=0,
+#                                           50=50,
+#                                           100=100,
+#                                           150=150,
+#                                           250=250,
+#                                           500=500,
+#                                           750=750,
+#                                           1000=1000,
+#                                           1500=1500,
+#                                           2000=2000,
+#                                           2500=2500,
+#                                           3000=3000
+#                                           )
+# 
+# quote_dat$COLL_Deductible <- recode_factor(quote_dat$COLL_Deductible,
+#                                           50=50,
+#                                           100=100,
+#                                           150=150,
+#                                           200=200,
+#                                           250=250,
+#                                           500=500,
+#                                           750=750,
+#                                           1000=1000,
+#                                           1500=1500,
+#                                           2000=2000,
+#                                           2500=2500,
+#                                           3000=3000
+#                                           )
+
+quote_dat$RateLevel_grp <- recode_factor(quote_dat$RateLevel_grp,"OTHER"="OTHER",
+                                   "UNITED"="UNITED",
+                                   "NURSE"="NURSE",
+                                   "PUBLIC_SAFETY"="PUBLIC_SAFETY",
+                                   "FIREFIGHTER"="FIREFIGHTER",
+                                   "HIGHWAY_PATROL"="HIGHWAY_PATROL",
+                                   "EDU_OTHER"="EDU_OTHER",
+                                   "HE"="HE",
+                                   "CTA/NEA"="CTA/NEA")
+
+quote_dat <- quote_dat %>% 
+  mutate(Record_Type1=case_when((Record_Type=="Sold" & TimePeriods=="CurrentYear")~"CurrentYear_Sold",
+                               (Record_Type=="Unsold" & TimePeriods=="CurrentYear")~"CurrentYear_Unsold",
+                               (Record_Type=="Sold" & TimePeriods=="Previous2Years")~"Previous2Years_Sold",
+                               TRUE~"Previous2Years_UnSold"))
+
+```
+
+
+```{r inforce_data,eval=FALSE}
+inforce_file <- read_file("I:/0.NEW/Other tasks/Shopper_DB/2023_04_14_study/inforce_query.sql")
+dat_inforce0 <- dbGetQuery(sql06, inforce_file)
+dat_inforce <- dat_inforce0 %>% 
+  separate(VEH_MAKE_MODEL,into = c('VEH_MAKE'),sep = " ") %>% 
+  mutate(COMP_DED=case_when(COMP_DED=="00 FALSE"~"0",
+                            COMP_DED=="100 TRUE"~"100",
+                            COMP_DED=="1000 TRUE"~"1000",
+                            COMP_DED=="2000 TRUE"~"2000",
+                            COMP_DED=="250 TRUE"~"250",
+                            COMP_DED=="3000 TRUE"~"3000",
+                            COMP_DED=="50 TRUE"~"50",
+                            COMP_DED=="500 TRUE"~"500",
+                            TRUE~COMP_DED)) %>% 
+  mutate_at(c("Persistency",'MODEL_YR','CMP_SYMBOL','COL_SYMBOL','ANNUAL_MILEAGE','COMP_DED','COLL_DED'),as.numeric) %>%
+  select(Current_Carrier_BI_Limit=`Current_Carrier_BI Limit`,everything())
+```
+
+
+```{r LR_CA_CW_graph_function,eval=FALSE}
+LR_graph_all <- function(varname,angle){
+  var <- enquo(varname)
+  # chart_title <- paste0("Exposure & On Level Loss Ratio - ",var)
+  
+  olep_dat_var <- olep_dat %>% 
+  group_by(CA_nonCA,.data[[var]],TimePeriods,COVERAGE_CD) %>%
+  summarise(ex=sum(EX),
+            ep=sum(EP),
+            olep=sum(OLEP),
+            inc_loss_dcc=sum(INC_LOSS_DCC),
+            capped_inc_loss_dcc=sum(CAPPED_INC_LOSS_DCC)) %>% 
+  mutate(olr=inc_loss_dcc/olep,capped_olr=capped_inc_loss_dcc/olep,
+         alr=inc_loss_dcc/ep) %>% 
+  arrange(CA_nonCA,TimePeriods,COVERAGE_CD,.data[[var]]) %>% 
+  ungroup() %>% 
+  group_by(CA_nonCA,TimePeriods,COVERAGE_CD) %>% 
+  mutate(ex_total=sum(ex),olep_total=sum(olep),loss_total=sum(inc_loss_dcc),capped_loss_total=sum(capped_inc_loss_dcc),
+         ep_total=sum(ep)) %>% 
+  mutate(olr_total=loss_total/olep_total,capped_olr_total=capped_loss_total/olep_total,
+         alr_total=loss_total/ep_total) %>% 
+  mutate(olr_grp=olr/olr_total,capped_olr_grp=capped_olr/capped_olr_total,
+         alr_grp=alr/alr_total) %>% 
+  mutate(ex_pct=ex/sum(ex))
+  
+  max_loss <- olep_dat_var %>% group_by(CA_nonCA,COVERAGE_CD) %>% 
+    summarise(max_round=ceiling(max(olr_grp)*2)/2,max_loss=max(olr_grp)) %>% 
+    arrange(CA_nonCA,COVERAGE_CD)
+
+  
+CA_BI <- olep_dat_var %>%
+  filter(COVERAGE_CD=='BI',CA_nonCA=='CA') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[1,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[1,4]],color=TimePeriods,group=TimePeriods)) +
+  # geom_line(aes(y=alr_grp/max_loss_actual[[1,4]],color=TimePeriods,group=TimePeriods),linetype="dashed") +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[1,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"),
+        axis.title = element_blank()) +
+  labs(title = "CA - BI")
+
+CA_PD <- olep_dat_var %>%
+  filter(COVERAGE_CD=='PD',CA_nonCA=='CA') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[4,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[4,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[4,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"),        
+        axis.title = element_blank()) +
+  labs(title = "CA - PD")
+
+CA_COMP <- olep_dat_var %>%
+  filter(COVERAGE_CD=='CMP',CA_nonCA=='CA') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[2,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[2,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[2,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"), #, hjust = 0.5 #middle
+        axis.title = element_blank()) +
+  labs(title = "CA - COMP")
+
+CA_COLL <- olep_dat_var %>%
+  filter(COVERAGE_CD=='COL',CA_nonCA=='CA') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[3,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[3,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[3,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue"),        
+        axis.title = element_blank()) +
+  labs(title = "CA - COLL")
+
+CW_BI <- olep_dat_var %>%
+  filter(COVERAGE_CD=='BI',CA_nonCA=='CW') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[5,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[5,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[5,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"),        
+        axis.title = element_blank()) +
+  labs(title= "CW - BI")
+
+CW_PD <- olep_dat_var %>%
+  filter(COVERAGE_CD=='PD',CA_nonCA=='CW') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[8,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[8,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[8,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"),        
+        axis.title = element_blank()) +
+  labs(title= "CW - PD")
+
+CW_COMP <- olep_dat_var %>%
+  filter(COVERAGE_CD=='CMP',CA_nonCA=='CW') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[6,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[6,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[6,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        # axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        axis.text.x = element_blank(),
+        plot.title = element_text(face="bold", colour="blue"), #, hjust = 1        
+        axis.title = element_blank()) +
+  labs(title= "CW - COMP")
+
+CW_COLL <- olep_dat_var %>%
+  filter(COVERAGE_CD=='COL',CA_nonCA=='CW') %>%
+  ggplot(aes(x=.data[[var]],y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=.data[[var]],y=olr_grp/max_loss[[7,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[7,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[7,4]])) +
+  # facet_wrap(~CA_nonCA,scales="free_y") +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue"),        
+        axis.title = element_blank()) +
+  labs(title= "CW - COLL")
+   
+CA_BI + CW_BI + 
+  CA_PD + CW_PD +
+  CA_COMP + CW_COMP +
+  CA_COLL + CW_COLL +
+  plot_layout(ncol=2) + 
+  plot_annotation(title = bquote(bold("Exposure & Loss Ratio Comparison")~"- Current year vs. Previous 2 years combined"),
+                  caption = bquote(italic("Chart Type: ")~bold("Bar")~ "~ EX (Y1 axis);"~ bold("Point/Line") ~"~ LR (Y2 axis)                                                 "~italic("Color code: ")~bold("Red/Pink")~ "= Current Year;"~ bold("Aqua/Blue")~ "= Last 2 years"),
+
+    # <span style='color:#0072B2;'>setosa</span>,
+    # <span style='color:#D55E00;'>versicolor</span>, and
+    # <span style='color:#009E73;'>virginica</span>
+    # </span>",
+                  # caption = "Sum of heights of same-color bars = 1",
+    theme=theme(plot.title=element_text(hjust=0.5,color = "red"),
+                 plot.subtitle = element_text(size = 10),
+                 plot.caption = element_text(hjust = 1))
+                  )
+  
+}
+
+# max_loss
+# max_loss[[1,4]]
+
+#https://stackoverflow.com/questions/49735290/ggplot2-color-individual-words-in-title-to-match-colors-of-groups
+# CA_BI
+# CW_BI
+```
+
+```{r quote_dat_fixed_var_func}
+quote_dat_fixed_var <- function(dataset,var){
+  dataset %>% 
+    group_by(Record_Type,.data[[var]]) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(Record_Type) %>%
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count))
+}
+
+#quote_dat_fixed_var(quote_dat_CA,y)
+```
+
+```{r OLEP_dat_fixed_var_func}
+olep_dat_fixed_var <- function(dataset,st,var,cov) {
+  # cov <- enquo(cov)
+  dataset %>% 
+  # {if_else(st == 'CW',filter(.,CA_nonCA=="CW"),filter(.,CA_nonCA=="CA"))} %>% #if_else doesnt work
+    {if(st == 'CW') filter(.,CA_nonCA=="CW") else filter(.,CA_nonCA=="CA")} %>%
+  filter(COVERAGE_CD==cov) %>% 
+  group_by(CA_nonCA,.data[[var]],TimePeriods,COVERAGE_CD) %>%
+  summarise(ex=sum(EX),
+            olep=sum(OLEP),
+            inc_loss_dcc=sum(INC_LOSS_DCC),
+            capped_inc_loss_dcc=sum(CAPPED_INC_LOSS_DCC)) %>% 
+  mutate(olr=inc_loss_dcc/olep,capped_olr=capped_inc_loss_dcc/olep) %>% 
+  arrange(CA_nonCA,TimePeriods,COVERAGE_CD,.data[[var]]) %>% 
+  ungroup() %>% 
+  group_by(CA_nonCA,TimePeriods,COVERAGE_CD) %>% 
+  mutate(ex_total=sum(ex),olep_total=sum(olep),loss_total=sum(inc_loss_dcc),capped_loss_total=sum(capped_inc_loss_dcc)) %>% 
+  mutate(olr_total=loss_total/olep_total,capped_olr_total=capped_loss_total/olep_total) %>% 
+  mutate(olr_grp=olr/olr_total,capped_olr_grp=capped_olr/capped_olr_total) %>% 
+  mutate(ex_pct=ex/sum(ex))
+}
+
+#olep_dat_fixed_var(olep_dat,'CW',y,'BI')
+```
+
+```{r check_categories_type,eval=FALSE}
+# x <- "Number_Of_Vehicles"
+#check unique values from raw data sets
+dat_quote0 %>% group_by(.data[[x]]) %>% summarise(count=n())
+olep_ca_dat %>% group_by(.data[[x]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count)
+olep_cw_dat %>% group_by(.data[[x]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count)
+
+#check uniqu values from transformed data sets
+quote_dat %>% group_by(.data[[x]]) %>% summarise(count=n())
+olep_dat %>% group_by(.data[[x]],CA_nonCA,COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count)
+
+#check count,pct,cum pct etc.
+olep_dat_fixed_var(olep_dat_CA,'CA',x,'BI')
+olep_dat_fixed_var(olep_dat_CW,'CW',x,'BI')
+```
+
+```{r check_categories_type_function}
+
+check_fun <- function(var,cov,qd0=TRUE,olepca0=TRUE,olepcw0=TRUE){
+#check unique values from raw data sets
+{if (qd0) quote_dat0 %>% group_by(.data[[var]]) %>% summarise(count=n()) %>% mutate(Table="raw_quote_data") %>% select(Table,everything()) %>% print()}
+{if (olepca0) olep_ca_dat %>% group_by(.data[[var]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% mutate(Table="raw_olepCA_data") %>% select(Table,everything()) %>% print()}
+{if (olepcw0) olep_cw_dat %>% group_by(.data[[var]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% mutate(Table="raw_olepCW_data") %>% select(Table,everything()) %>% print()}
+
+#check uniqu values from transformed data sets
+quote_dat %>% group_by(CA_nonCA,.data[[var]]) %>% summarise(count=n()) %>% 
+  mutate(pct=count/sum(count)) %>% 
+  mutate(Table="final_quote_data") %>% select(Table,everything()) %>% print()
+olep_dat %>% filter(COVERAGE_CD %in% c("BI","PD","CMP","COL")) %>% 
+  group_by(.data[[var]],CA_nonCA,COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% mutate(Table="final_olep_data") %>% select(Table,everything()) %>% print()
+
+#check count,pct,cum pct etc.
+olep_dat_fixed_var(olep_dat_CA,'CA',var,cov) %>% mutate(Table="final_olepCA_stat") %>% select(Table,CA_nonCA:inc_loss_dcc,ex_pct,olr,olr_grp,everything()) %>% print()
+olep_dat_fixed_var(olep_dat_CW,'CW',var,cov) %>% mutate(Table="final_olepCW_stat") %>% select(Table,CA_nonCA:inc_loss_dcc,ex_pct,olr,olr_grp,everything()) %>% print()
+}
+
+# check_fun(x,'BI',F,F)
+
+```
+
+```{r check_categories_type_function1}
+
+check_fun1 <- function(var){
+#check unique values from raw data sets
+quote_dat0 %>% group_by(.data[[var]]) %>% summarise(count=n()) %>% print()
+olep_ca_dat %>% group_by(.data[[var]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% print()
+olep_cw_dat %>% group_by(.data[[var]],COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% print()
+
+#check uniqu values from transformed data sets
+quote_dat %>% group_by(.data[[var]]) %>% summarise(count=n()) %>% print()
+olep_dat %>% group_by(.data[[var]],CA_nonCA,COVERAGE_CD) %>% summarise(count=n()) %>% pivot_wider(names_from = COVERAGE_CD,values_from=count) %>% print()
+
+#check count,pct,cum pct etc.
+olep_dat_fixed_var(olep_dat_CA,'CA',var,'BI') %>% print()
+olep_dat_fixed_var(olep_dat_CW,'CW',var,'BI') %>% print()
+}
+
+# check_fun1(x)
+
+```
+
+```{r LR_graph_function}
+LR_graph <- function(dataset,var,angle){
+  # var <- enquo(varname)
+  
+  olep_dat_var <- dataset %>% 
+  group_by(CA_nonCA,.data[[var]],TimePeriods,COVERAGE_CD) %>%
+  summarise(ex=sum(EX),
+            ep=sum(EP),
+            olep=sum(OLEP),
+            inc_loss_dcc=sum(INC_LOSS_DCC),
+            capped_inc_loss_dcc=sum(CAPPED_INC_LOSS_DCC)) %>% 
+  mutate(olr=inc_loss_dcc/olep,capped_olr=capped_inc_loss_dcc/olep,
+         alr=inc_loss_dcc/ep) %>% 
+  arrange(CA_nonCA,TimePeriods,COVERAGE_CD,.data[[var]]) %>% 
+  ungroup() %>% 
+  group_by(CA_nonCA,TimePeriods,COVERAGE_CD) %>% 
+  mutate(ex_total=sum(ex),olep_total=sum(olep),loss_total=sum(inc_loss_dcc),capped_loss_total=sum(capped_inc_loss_dcc)
+         # ,
+         # ep_total=sum(ep)
+         ) %>% 
+  mutate(olr_total=loss_total/olep_total,capped_olr_total=capped_loss_total/olep_total
+         # ,
+         # alr_total=loss_total/ep_total
+         ) %>% 
+  mutate(olr_grp=olr/olr_total,capped_olr_grp=capped_olr/capped_olr_total
+         # ,
+         # alr_grp=alr/alr_total
+         ) %>% 
+  mutate(ex_pct=ex/sum(ex))
+  
+  max_loss <- olep_dat_var %>% group_by(CA_nonCA,COVERAGE_CD) %>% 
+    summarise(max_round=ceiling(max(olr_grp)*2)/2,max_loss=max(olr_grp)) %>% 
+    arrange(CA_nonCA,COVERAGE_CD)
+  
+  # max_loss_actual <- olep_dat_var %>% group_by(CA_nonCA,COVERAGE_CD) %>% 
+  #   filter(TimePeriods=="CurrentYear") %>% 
+  #   summarise(max_round=ceiling(max(alr_grp)*2)/2,max_loss=max(alr_grp)) %>% 
+  #   arrange(CA_nonCA,COVERAGE_CD)  
+  
+BI <- olep_dat_var %>%
+  filter(COVERAGE_CD=='BI') %>%
+  ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[1,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[1,4]],color=TimePeriods,group=TimePeriods)) +
+  # geom_line(data=.%>% filter(TimePeriods=="CurrentYear"),aes(y=alr_grp/max_loss[[1,4]],color=TimePeriods,group=TimePeriods),linetype="dashed") +  
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[1,4]])) +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue",size=11),
+        axis.title = element_blank()) +
+  labs(title = paste0("BI: Avg_LR = ",olep_dat_var %>%
+  filter(COVERAGE_CD=='BI') %>% ungroup() %>% select(olr_total) %>% unique() %>% round(.,2)))
+
+PD <- olep_dat_var %>%
+  filter(COVERAGE_CD=='PD') %>%
+  ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[4,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[4,4]],color=TimePeriods,group=TimePeriods)) +
+  # geom_line(data=.%>% filter(TimePeriods=="CurrentYear"),aes(y=alr_grp/max_loss[[4,4]],color=TimePeriods,group=TimePeriods),linetype="dashed") +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[4,4]])) +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue",size=11),        
+        axis.title = element_blank()) +
+  labs(title = paste0("PD: Avg_LR = ",olep_dat_var %>%
+  filter(COVERAGE_CD=='PD') %>% ungroup() %>% select(olr_total) %>% unique() %>% round(.,2)))
+
+COMP <- olep_dat_var %>%
+  filter(COVERAGE_CD=='CMP') %>%
+  ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[2,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[2,4]],color=TimePeriods,group=TimePeriods)) +
+  # geom_line(data=.%>% filter(TimePeriods=="CurrentYear"),aes(y=alr_grp/max_loss[[2,4]],color=TimePeriods,group=TimePeriods),linetype="dashed") +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[2,4]])) +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue",size=11), #, hjust = 0.5 #middle
+        axis.title = element_blank()) +
+  labs(title = paste0("COMP: Avg_LR = ",olep_dat_var %>%
+  filter(COVERAGE_CD=='CMP') %>% ungroup() %>% select(olr_total) %>% unique() %>% round(.,2)))
+
+COLL <- olep_dat_var %>%
+  filter(COVERAGE_CD=='COL') %>%
+  ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[3,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[3,4]],color=TimePeriods,group=TimePeriods)) +
+  # geom_line(data=.%>% filter(TimePeriods=="CurrentYear"),aes(y=alr_grp/max_loss[[3,4]],color=TimePeriods,group=TimePeriods),linetype="dashed") +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[3,4]])) +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue",size=11),        
+        axis.title = element_blank()) +
+  labs(title = paste0("COLL: Avg_LR = ",olep_dat_var %>%
+  filter(COVERAGE_CD=='COL') %>% ungroup() %>% select(olr_total) %>% unique() %>% round(.,2)))
+
+   
+BI + PD + COMP + COLL +
+  plot_layout(ncol=2) + 
+  plot_annotation(title = bquote(bold("Exposure & Loss Ratio")~""),
+                  caption = bquote(bold("Avg_LR:")~" 1st # is Current Year, 2nd # is Previous 2 Years                    "~bold("Bar")~ "~ EX (Y1 axis);"~ bold("Point/Line") ~"~ LR (Y2 axis)                                 "~bold("Red/Pink")~ "= Current Year;"~ bold("Aqua/Blue")~ "= Previous 2 Years"),
+    theme=theme(plot.title=element_text(hjust=0.5,color = "blue",size = 13),
+                 plot.subtitle = element_text(size = 12),
+                 plot.caption = element_text(hjust = 1))
+                  )
+  
+}
+
+# max_loss
+# max_loss[[1,4]]
+
+#https://stackoverflow.com/questions/49735290/ggplot2-color-individual-words-in-title-to-match-colors-of-groups
+# CA_BI
+# CW_BI
+```
+
+```{r LR_by_cov_graph_function}
+LR_graph_cov <- function(dataset,var,cov,angle){
+  # var <- enquo(varname)
+  
+  olep_dat_var <- dataset %>% filter(COVERAGE_CD==cov) %>% 
+  group_by(CA_nonCA,.data[[var]],TimePeriods,COVERAGE_CD) %>%
+  summarise(ex=sum(EX),
+            olep=sum(OLEP),
+            inc_loss_dcc=sum(INC_LOSS_DCC),
+            capped_inc_loss_dcc=sum(CAPPED_INC_LOSS_DCC)) %>% 
+  mutate(olr=inc_loss_dcc/olep,capped_olr=capped_inc_loss_dcc/olep) %>% 
+  arrange(CA_nonCA,TimePeriods,COVERAGE_CD,.data[[var]]) %>% 
+  ungroup() %>% 
+  group_by(CA_nonCA,TimePeriods,COVERAGE_CD) %>% 
+  mutate(ex_total=sum(ex),olep_total=sum(olep),loss_total=sum(inc_loss_dcc),capped_loss_total=sum(capped_inc_loss_dcc)) %>% 
+  mutate(olr_total=loss_total/olep_total,capped_olr_total=capped_loss_total/olep_total) %>% 
+  mutate(olr_grp=olr/olr_total,capped_olr_grp=capped_olr/capped_olr_total) %>% 
+  mutate(ex_pct=ex/sum(ex))
+  
+  max_loss <- olep_dat_var %>% group_by(CA_nonCA,COVERAGE_CD) %>% 
+    summarise(max_round=ceiling(max(olr_grp)*2)/2,max_loss=max(olr_grp)) %>% 
+    arrange(CA_nonCA,COVERAGE_CD)
+  
+cov_grp <- olep_dat_var %>%
+  # filter(COVERAGE_CD=='BI') %>%
+  ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+  geom_col(stat="identity",position = "dodge") +
+  geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[1,4]],color=TimePeriods)) +
+  geom_line(aes(y=olr_grp/max_loss[[1,4]],color=TimePeriods,group=TimePeriods)) +
+    scale_color_manual(values = c("red","blue")) +
+  scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[1,4]])) +
+  theme_bw() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+        plot.title = element_text(face="bold", colour="blue",size=11),
+        axis.title = element_blank()) +
+  labs(title = cov)
+
+# PD <- olep_dat_var %>%
+#   filter(COVERAGE_CD=='PD') %>%
+#   ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+#   geom_col(stat="identity",position = "dodge") +
+#   geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[4,4]],color=TimePeriods)) +
+#   geom_line(aes(y=olr_grp/max_loss[[4,4]],color=TimePeriods,group=TimePeriods)) +
+#     scale_color_manual(values = c("red","blue")) +
+#   scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[4,4]])) +
+#   theme_bw() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+#         plot.title = element_text(face="bold", colour="blue",size=11),        
+#         axis.title = element_blank()) +
+#   labs(title = "PD")
+# 
+# COMP <- olep_dat_var %>%
+#   filter(COVERAGE_CD=='CMP') %>%
+#   ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+#   geom_col(stat="identity",position = "dodge") +
+#   geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[2,4]],color=TimePeriods)) +
+#   geom_line(aes(y=olr_grp/max_loss[[2,4]],color=TimePeriods,group=TimePeriods)) +
+#     scale_color_manual(values = c("red","blue")) +
+#   scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[2,4]])) +
+#   theme_bw() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+#         plot.title = element_text(face="bold", colour="blue",size=11), #, hjust = 0.5 #middle
+#         axis.title = element_blank()) +
+#   labs(title = "COMP")
+# 
+# COLL <- olep_dat_var %>%
+#   filter(COVERAGE_CD=='COL') %>%
+#   ggplot(aes(x=as.factor(.data[[var]]),y=ex_pct,fill=TimePeriods)) +
+#   geom_col(stat="identity",position = "dodge") +
+#   geom_point(aes(x=as.factor(.data[[var]]),y=olr_grp/max_loss[[3,4]],color=TimePeriods)) +
+#   geom_line(aes(y=olr_grp/max_loss[[3,4]],color=TimePeriods,group=TimePeriods)) +
+#     scale_color_manual(values = c("red","blue")) +
+#   scale_y_continuous(sec.axis = sec_axis(~.*max_loss[[3,4]])) +
+#   theme_bw() +
+#   theme(legend.position = "none",
+#         axis.text.x = element_text(angle = angle, hjust = 1), #,size = 10
+#         plot.title = element_text(face="bold", colour="blue",size=11),        
+#         axis.title = element_blank()) +
+#   labs(title = "COLL")
+
+   
+cov_grp +
+  plot_layout(ncol=1) + 
+  plot_annotation(title = bquote(bold("Exposure & Loss Ratio")~""),
+                  caption = bquote(bold("Bar")~ "~ EX (Y1 axis);"~ bold("Point/Line") ~"~ LR (Y2 axis)                                                 "~bold("Red/Pink")~ "= Current Year;"~ bold("Aqua/Blue")~ "= Last 2 years"),
+    theme=theme(plot.title=element_text(hjust=0.5,color = "blue",size = 13),
+                 plot.subtitle = element_text(size = 12),
+                 plot.caption = element_text(hjust = 1))
+                  )
+  
+}
+
+```
+
+```{r theme_graph}
+theme_gppr <- function(angle){
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = angle, hjust = 1,size = 9),
+          axis.text.y = element_text(size = 9),
+          legend.title = element_blank(),
+          panel.grid.major = element_blank(),
+          # panel.grid.minor = element_blank(),        
+          legend.position = "bottom",
+          plot.title = element_text(face="bold", colour="red",size = 13),
+          plot.subtitle = element_text(face="bold", colour="blue",size = 12, hjust = 0.5),
+          # plot.caption = element_text(color = "blue", face = "italic", hjust = 0),
+          strip.text.x = element_text(size = 9, color = "blue", face = "bold"),
+          strip.text.y = element_text(size = 9, color = "blue", face = "bold",angle = 0)
+          )    
+}
+
+# theme_gppr1 <- function(angle){
+#   theme_bw() +
+#     theme(axis.text.x = element_text(angle = angle, hjust = 1,size = 9),
+#           axis.text.y = element_text(size = 9),
+#           legend.title = element_blank(),
+#           panel.grid.major = element_blank(),
+#           # panel.grid.minor = element_blank(),        
+#           legend.position = "bottom",
+#           plot.title = element_text(face="bold", colour="red",size = 13),
+#           plot.subtitle = element_text(face="bold", colour="red",size = 12, hjust = 0.5),
+#           # plot.caption = element_text(color = "blue", face = "italic", hjust = 0),
+#           strip.text.x = element_text(size = 9, color = "blue", face = "bold"),
+#           strip.text.y = element_text(size = 9, color = "blue", face = "bold",angle = 0)
+#           )    
+# }
+```
+
+```{r quote_graph_CA_CW_func}
+bar_grp_cw <- function(dataset,st,split,var,numgroup,group,flip=FALSE,angle,cw=FALSE,ratio) {
+  st <- enquo(st)
+  # var <- enquo(var)
+  group <- enquo(group)
+  flip <- if (flip) coord_flip()
+  ncol <- if (numgroup == 1) 4 else 2
+  dat_bar <-  dataset 
+  # %>%
+  #   {if(numgroup == 1) filter(.,Num_Of_Quotes!=0) else filter(.,Num_Of_Quotes==!!group)}
+  dat_point <- dataset %>% 
+    group_by(TimePeriods,Record_Type,.data[[var]]) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(TimePeriods,Record_Type) %>% 
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count)/ratio)
+  dat_bar %>%
+    ggplot(aes(x=as.factor(.data[[var]]), group = Record_Type,fill=Record_Type)) +    
+    geom_bar(aes( y = ..prop..), alpha=1, stat="count",position = "dodge") +
+    geom_point(data=dat_point,aes(x=as.factor(.data[[var]]),y=cumpct,color=Record_Type),size=1.5,alpha=1) +
+  geom_line(data=dat_point,aes(x=as.factor(.data[[var]]),y=cumpct,group=Record_Type,color=Record_Type),size=1.25,alpha=1) +
+    # scale_fill_viridis() +
+  scale_y_continuous(sec.axis = sec_axis(~.*ratio)) +   
+    scale_fill_manual(values=c("#F8766D",
+                             # "#33FFFF",
+                             # "red",
+                             "darkblue")) +
+  # scale_fill_gradient() +
+    flip +
+        theme_gppr(angle) + theme(legend.position = "none") +
+    
+    labs(
+         title= st,
+         subtitle = ifelse(split==2,"Sold vs. Unsold Dist.","Sold vs. Unsold Dist."), 
+         caption = bquote(bold("Bar")~ "~ Frequency (Y1 axis);"~ bold("Point/Line") ~"~ Cummulative Freq. (Y2 axis)                                                 "~bold("Pink")~ "= Sold;"~ bold("Aqua/DarkBlue")~ "= Unsold"),
+         legend.position = "none",
+         x=element_blank(),
+         y=element_blank()) +
+    facet_wrap(~TimePeriods, ncol = 2)  #,scales = "free_x"
+}
+```
+
+
+```{r Quote_graph_state_function}
+Quote_graph <- function(dataset,numgroup,var,angle,stack,ratio){
+
+  # var <- enquo(var) #removing this one so that we can set x <- "var" before calling function
+  # numgroup <- enquo(numgroup)
+  # flip <- if (flip) coord_flip()
+  # ncol <- if (numgroup == 1) 4 else 2
+  # dat_bar <-  dataset 
+  #dataset,split,var,numgroup,group,flip=FALSE,angle,cw=FALSE,ratio  
+
+dat1 <- dataset %>% 
+    {if(numgroup == 1) filter(.,RISK_ST %in% c("AZ","CT","IL","KS")) 
+      else filter(.,RISK_ST %in% c("MN","NE","OR","PA","WA"))}  
+
+dat2 <- dataset %>% 
+    {if(numgroup == 1) filter(.,RISK_ST %in% c("CO","ID","IN","MD")) 
+      else filter(.,RISK_ST %in% c("MO","NJ","OH","VA","WY"))}
+  
+dat_point1 <- dat1 %>%
+    group_by(RISK_ST,TimePeriods,Record_Type,.data[[var]]) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(RISK_ST,TimePeriods,Record_Type) %>% 
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count)/ratio)
+
+dat_point2 <- dat2 %>%
+    group_by(RISK_ST,TimePeriods,Record_Type,.data[[var]]) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(RISK_ST,TimePeriods,Record_Type) %>% 
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count)/ratio)    
+ 
+p1 <- dat1 %>%
+    ggplot(aes(x=as.factor(.data[[var]]), group = Record_Type,fill=Record_Type)) +
+    geom_bar(aes( y = ..prop..), alpha=0.95, stat="count",position = if_else(stack==1,"stack","dodge")) +
+    geom_point(data=dat_point1,aes(x=as.factor(.data[[var]]),y=cumpct,color=Record_Type),size=1.5,alpha=1) +
+  geom_line(data=dat_point1,aes(x=as.factor(.data[[var]]),y=cumpct,group=Record_Type,color=Record_Type),size=1.25,alpha=1) +
+  scale_y_continuous(sec.axis = sec_axis(~.*ratio)) +
+    # flip +
+        theme_gppr(angle) +
+    labs(
+         title= if_else(numgroup==2,"","18 States"),
+         subtitle = if_else(numgroup==2,"","Sold vs. Unsold Dist."),
+         x=element_blank(),
+         y=element_blank()) +
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ) +
+  facet_grid(rows=vars(RISK_ST),cols = vars(TimePeriods),scales = "free_y")
+
+p2 <- dat2 %>%
+    ggplot(aes(x=as.factor(.data[[var]]), group = Record_Type,fill=Record_Type)) +
+    geom_bar(aes( y = ..prop..), alpha=0.95, stat="count",position = if_else(stack==1,"stack","dodge")) +
+    geom_point(data=dat_point2,aes(x=as.factor(.data[[var]]),y=cumpct,color=Record_Type),size=1.5,alpha=1) +
+  geom_line(data=dat_point2,aes(x=as.factor(.data[[var]]),y=cumpct,group=Record_Type,color=Record_Type),size=1.25,alpha=1) +
+  scale_y_continuous(sec.axis = sec_axis(~.*ratio)) +
+    # flip +
+        theme_gppr(angle) +
+    labs(
+         x=element_blank(),
+         y=element_blank()) +
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ) +
+  facet_grid(rows=vars(RISK_ST),cols = vars(TimePeriods),scales = "free_y")
+
+p1 + p2 +
+  plot_layout(ncol=2) +
+  plot_annotation(caption = if_else(numgroup==1,"","Bar ~ Frequency; Point/Line ~ Cum Freq.   ||  Pink = Sold; Aqua = Unsold"))
+ 
+}
+```
+
+```{r bar_grp_no_pointline_ca_cw}
+bar_grp_nopoint_noline_ca_cw <- function(dataset,var,angle,cw=FALSE) {
+  dataset %>%   
+    ggplot(aes(x=.data[[var]], group = Record_Type,fill=Record_Type,color=Record_Type)) +    
+    geom_bar(aes( y = ..prop..), stat="count",position = "dodge") +
+    scale_y_continuous(labels=scales::percent) +
+    theme_gppr(angle)  + theme(legend.position = "none") +
+    geom_density(alpha = 0.05)+
+    labs(
+         title= ifelse((cw),"CW","CA"), 
+         subtitle = "Sold vs. Unsold Dist.",
+         caption = bquote(bold("Pink")~ "= Sold;"~ bold("Aqua")~ "= Unsold"),
+         x=element_blank(),
+         y=element_blank()) + 
+    facet_wrap(~TimePeriods)
+}
+
+```
+
+```{r bar_grp_no_pointline_st}
+bar_grp_nopoint_noline_st <- function(dataset,var,angle,numgroup) {
+  
+dat1 <- dataset %>% 
+    {if(numgroup == 1) filter(.,RISK_ST %in% c("AZ","CT","IL","KS")) 
+      else filter(.,RISK_ST %in% c("MN","NE","OR","PA","WA"))}  
+
+dat2 <- dataset %>% 
+    {if(numgroup == 1) filter(.,RISK_ST %in% c("CO","ID","IN","MD")) 
+      else filter(.,RISK_ST %in% c("MO","NJ","OH","VA","WY"))}  
+  
+p1 <-  dat1 %>%   
+    ggplot(aes(x=.data[[var]], group = Record_Type,fill=Record_Type,color=Record_Type)) +    
+    geom_bar(aes( y = ..prop..), stat="count",position = "dodge") +
+    scale_y_continuous(labels=scales::percent) +
+    theme_gppr(angle)  + theme(legend.position = "none") +
+    geom_density(alpha = 0.05)+
+    labs(
+         title= if_else(numgroup==2,"","18 States"),
+         subtitle = if_else(numgroup==2,"","Sold vs. Unsold Dist."),
+         x=element_blank(),
+         y=element_blank()) + 
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ) +
+  facet_grid(rows=vars(RISK_ST),cols = vars(TimePeriods),scales = "free_y")
+
+p2 <-  dat2 %>%   
+    ggplot(aes(x=.data[[var]], group = Record_Type,fill=Record_Type,color=Record_Type)) +    
+    geom_bar(aes( y = ..prop..), stat="count",position = "dodge") +
+    scale_y_continuous(labels=scales::percent) +
+    theme_gppr(angle)  + theme(legend.position = "none") +
+    geom_density(alpha = 0.05)+
+    labs(
+         x=element_blank(),
+         y=element_blank()) + 
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ) +
+  facet_grid(rows=vars(RISK_ST),cols = vars(TimePeriods),scales = "free_y")
+  
+p1 + p2 +
+  plot_layout(ncol=2) +
+  plot_annotation(caption = if_else(numgroup==1,"","Pink = Sold; Aqua = Unsold"))  
+  
+}
+
+# bar_grp_nopoint_noline_st(quote_dat_CW,"Minimum_Years_Licensed",0,2) 
+```
+
+```{r create_subsets}
+olep_dat_CA <- olep_dat %>% filter(CA_nonCA=="CA")
+olep_dat_CW <- olep_dat %>% filter(CA_nonCA=="CW")
+olep_dat_um_CA <- olep_dat_um %>% filter(CA_nonCA=="CA")
+olep_dat_um_CW <- olep_dat_um %>% filter(CA_nonCA=="CW")
+quote_dat_CA_all <- quote_dat %>% filter(CA_nonCA=="CA")
+quote_dat_CA <- quote_dat_CA_all %>% filter(UNIT==1)
+quote_dat_CW_all <- quote_dat %>% filter(CA_nonCA=="CW")
+quote_dat_CW <- quote_dat_CW_all %>% filter(UNIT==1)
+```
+
+```{r note,fig.width=11,fig.height=8,eval=FALSE}
+#https://rlang.r-lib.org/reference/topic-data-mask-programming.html
+#https://rlang.r-lib.org/reference/topic-data-mask.html
+
+#if there's no enquo(var) inside the function, we can do
+#this - which is more systematic programming
+x <- "AnnualMileage_grp"
+Quote_graph(dat,1,x,90,1)
+Quote_graph(dat,2,x,90,1)
+
+#or this
+Quote_graph(dat,1,'AnnualMileage_grp',90,1) 
+
+#if there's enquo(var) inside the function, we can do
+#this
+Quote_graph(dat,1,AnnualMileage_grp,90,1) 
+
+#option 1 give us more flexibility, since we can define x just once, and put x in place of var in all the functions
+#oftion 2 & 3 will require us to pass on the var in every function
+
+#https://stackoverflow.com/questions/74308652/how-to-increment-a-new-column-based-on-value-in-another-column-in-r
+#https://search.r-project.org/CRAN/refmans/groupdata2/html/group.html
+#https://www.statology.org/data-binning-in-r/
+```
+
+```{r fig.width=11,fig.height=8,eval=FALSE}
+dat_point1 <- dat %>% 
+  filter(RISK_ST %in% c("AZ","CO","CT","ID","IL")) %>%
+    # {if(numgroup == 1) filter(.,Num_Of_Quotes!=0) else filter(.,Num_Of_Quotes==!!group)} %>%
+    group_by(RISK_ST,TimePeriods,Record_Type,AnnualMileage_grp) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(RISK_ST,TimePeriods,Record_Type) %>% 
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count)/2)
+
+dat_point2 <- dat %>% 
+  filter(RISK_ST %in% c("MO","NE","NJ","OH","OR")) %>%
+    # {if(numgroup == 1) filter(.,Num_Of_Quotes!=0) else filter(.,Num_Of_Quotes==!!group)} %>%
+    group_by(RISK_ST,TimePeriods,Record_Type,AnnualMileage_grp) %>% 
+    summarise(grp_count=n()) %>% 
+    group_by(RISK_ST,TimePeriods,Record_Type) %>% 
+    mutate(sum=sum(grp_count),pct=grp_count/sum,cumpct=cumsum(grp_count)/sum(grp_count)/2)
+
+p1 <- dat %>% 
+  filter(RISK_ST %in% c("AZ","CO","CT","ID","IL")) %>%
+    ggplot(aes(x=AnnualMileage_grp, group = Record_Type,fill=Record_Type)) +    
+    # geom_bar(aes( y = ..prop..), alpha=0.5, stat="count",position = "stack") +
+    geom_point(data=dat_point1,aes(x=AnnualMileage_grp,y=pct,color=Record_Type),size=1.5,alpha=1) +
+  geom_line(data=dat_point1,aes(x=AnnualMileage_grp,y=pct,group=Record_Type,color=Record_Type),size=1.25,alpha=1) +
+  # scale_y_continuous(sec.axis = sec_axis(~.*2)) +
+    # flip +
+    #     theme_gppr(angle) +
+    labs(
+         title= "Sold vs. Unsold Distribution:", 
+         # subtitle = var,
+         # caption = "Bar indicating Frequency distribution _  Line representing Cumulative frequency",
+         # caption = if_else(numgroup==2, c(group,"Bar ~ percentage distribution; Line ~ Cumulative percentage"), 
+         #             c("Bar ~ percentage distribution; Line ~ Cumulative percentage")),
+         x=element_blank(),
+         y=element_blank()) +
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ,axis.text.x = element_text(angle = 90)
+      # ,axis.text.y.right = element_blank()
+      ) +
+    # facet_wrap(~RISK_ST, ncol = 4)  #,scales = "free_x"
+  facet_grid(cols=vars(RISK_ST),rows = vars(TimePeriods),scales = "free_y")
+
+p2 <- dat %>% 
+  filter(RISK_ST %in% c("MO","NE","NJ","OH","OR")) %>% 
+    ggplot(aes(x=AnnualMileage_grp, group = Record_Type,fill=Record_Type)) +    
+    # geom_bar(aes( y = ..prop..), alpha=0.5, stat="count",position = "stack") +
+    geom_point(data=dat_point2,aes(x=AnnualMileage_grp,y=pct,color=Record_Type),size=1.5,alpha=1) +
+  geom_line(data=dat_point2,aes(x=AnnualMileage_grp,y=pct,group=Record_Type,color=Record_Type),size=1.25,alpha=1) +
+  # scale_y_continuous(sec.axis = sec_axis(~.*2)) +
+    # flip +
+    #     theme_gppr(angle) +
+    labs(
+         # title= "Quote vs. In-force Distribution:", 
+         # subtitle = var,
+         # caption = "Bar indicating Frequency distribution _  Line representing Cumulative frequency",
+         # caption = if_else(numgroup==2, c(group,"Bar ~ percentage distribution; Line ~ Cumulative percentage"), 
+         #             c("Bar ~ percentage distribution; Line ~ Cumulative percentage")),
+         x=element_blank(),
+         y=element_blank()) +
+    theme(
+      plot.caption = element_text(hjust=c(1, 0))
+      ,legend.position = "none"
+      ,axis.text.x = element_text(angle = 90)
+      # ,axis.text.y.left = element_blank()
+      ) +
+    # facet_wrap(~RISK_ST, ncol = 4)  #,scales = "free_x"
+  facet_grid(cols=vars(RISK_ST),rows = vars(TimePeriods),scales = "free_y")
+
+p1 + p2 +
+  plot_layout(ncol=1)
+```
+
+
+# Graphs: policy-level variables
+
+## Number of Rated Drivers
+
+```{r}
+x <- "Number_Of_Rater_Drivers"
+```
+
+
+```{r eval=FALSE}
+check_fun(x,'COL')
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5}
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#there is 1 record with blank
+LR_graph(olep_dat_CW %>% filter(!is.na(Number_Of_Rater_Drivers)),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+Quote_graph(quote_dat_CW,1,x,0,2,2)
+Quote_graph(quote_dat_CW,2,x,0,2,2)
+```
+
+
+
+
+```{r eval=FALSE}
+## Number of Vehicles
+#6/2/23 decided not to graph this but only rated vehicles since the charts don't look much different
+x <- "Number_Of_Vehicles"
+```
+
+```{r eval=FALSE}
+check_fun(x,'BI')
+```
+
+```{r fig.width= 11, fig.height=2.6,eval=FALSE}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.8)
+```
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+#tried to use mutate to convert >=12 to 12 but got error, even though already filtered NA in previous step. Tried to remove the conversion of Number_Of_Vehicles to numeric when going from olep_dat0 to olep_dat, didn't help. Thus, eliminate >12 records in the graph
+#https://stackoverflow.com/questions/71199096/dplyrcase-when-inexplicably-returns-namesmessage-vtmp-error
+# olep_dat_CA$Number_Of_Vehicles %>% mode()
+
+LR_graph(olep_dat_CA %>% 
+           # mutate(ifelse(is.na(Number_Of_Vehicles), NA, Number_Of_Vehicles)) %>%
+           # mutate(Number_Of_Vehicles=case_when(Number_Of_Vehicles>=12~12,TRUE~Number_Of_Vehicles)) %>% 
+           filter(!is.na(Number_Of_Vehicles),Number_Of_Vehicles!=0,Number_Of_Vehicles<=12),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6,eval=FALSE}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1.6)
+```
+
+```{r fig.width=11,fig.height=5.1,eval=FALSE}
+LR_graph(olep_dat_CW %>% 
+           filter(!is.na(Number_Of_Vehicles),Number_Of_Vehicles!=0,Number_Of_Vehicles<=12),x,0)
+```
+
+
+```{r fig.width=11,fig.height=8.5,eval=FALSE}
+Quote_graph(quote_dat_CW,1,x,0,2,2)
+Quote_graph(quote_dat_CW,2,x,0,2,2)
+```
+
+## Number Of Rated Vehicles
+
+```{r}
+x <- "Number_Of_Rated_Vehicles"
+```
+
+```{r eval=FALSE}
+check_fun(x,'CMP')
+#there are 45 combinations of these 2 var, need to ask IT how these 2 columns are derived from
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA %>% filter(.data[[x]]!=0),CA,2,x,1,"",FALSE,0,FALSE,1.8)
+```
+
+```{r fig.width=11,fig.height=5}
+#tried to use mutate to convert >=12 to 12 but got error, even though already filtered NA in previous step. Tried to remove the conversion of Number_Of_Vehicles to numeric when going from olep_dat0 to olep_dat, didn't help. Thus, eliminate >12 records in the graph
+#https://stackoverflow.com/questions/71199096/dplyrcase-when-inexplicably-returns-namesmessage-vtmp-error
+# olep_dat_CA$Number_Of_Vehicles %>% mode()
+
+LR_graph(olep_dat_CA %>% 
+           # mutate(ifelse(is.na(Number_Of_Vehicles), NA, Number_Of_Vehicles)) %>%
+           # mutate(Number_Of_Vehicles=case_when(Number_Of_Vehicles>=12~12,TRUE~Number_Of_Vehicles)) %>% 
+           filter(!is.na(.data[[x]]),.data[[x]]!=0,.data[[x]]<=12),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW %>% filter(.data[[x]]!=0),CW,2,x,1,"",FALSE,0,FALSE,1.6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% 
+           filter(!is.na(.data[[x]]),.data[[x]]!=0,.data[[x]]<=12),x,0)
+```
+
+
+```{r fig.width=11,fig.height=8.5}
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=0),1,x,0,2,2)
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=0),2,x,0,2,2)
+```
+
+## No. Of Chargeable Accidents
+
+```{r}
+x <- "No_Of_Chargeable_Accidents"
+```
+
+```{r eval=FALSE}
+check_fun(x,"CMP",F,F,F)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.1)
+```
+
+**This variable is calculated/collected in PC at policy level, however, this is driver-level rating element for CA rating plan. Thus, there’s NO loss ratio data at this point.**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#there is 1 record with blank
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+Quote_graph(quote_dat_CW,1,x,0,2,1)
+Quote_graph(quote_dat_CW,2,x,0,2,1)
+```
+
+## No. Of Major Incidents
+
+```{r}
+x <- "No_Of_Major_Incidents"
+```
+
+```{r eval=FALSE}
+check_fun(x,"CMP")
+```
+
+
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+**This variable is calculated/collected in PC at the policy level, however, this is driver-level rating element for CA rating plan. Thus, there’s NO loss ratio data at this point.**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+Quote_graph(quote_dat_CW,1,x,0,2,1)
+Quote_graph(quote_dat_CW,2,x,0,2,1)
+```
+
+## No. Of Minor Incidents
+
+```{r}
+x <- "No_Of_Minor_Incidents"
+```
+
+```{r eval=FALSE}
+check_fun(x,"CMP")
+```
+
+
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]])),CA,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+**This variable is calculated/collected in PC at the policy level, however, this is driver-level rating element for CA rating plan. Thus, there’s NO loss ratio data at this point.**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),1,x,0,2,1)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),2,x,0,2,1)
+```
+
+## Minimum Years Licensed
+
+```{r}
+x <- "Min_Yrs_Licensed_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r eval=FALSE}
+quote_dat1 %>% filter(UNIT==1) %>% group_by(RISK_ST,Minimum_Years_Licensed) %>% summarise(count=n()) %>% pivot_wider(names_from=RISK_ST,values_from=count)
+quote_dat %>% filter(UNIT==1) %>% group_by(RISK_ST,Min_Yrs_Licensed_grp) %>% summarise(count=n()) %>% pivot_wider(names_from=RISK_ST,values_from=count) 
+olep_dat0 %>%  group_by(RISK_ST,Minimum_Years_Licensed) %>% summarise(count=n()) %>% pivot_wider(names_from=RISK_ST,values_from=count)
+olep_dat %>% group_by(RISK_ST,Min_Yrs_Licensed_grp) %>% summarise(count=n()) %>% pivot_wider(names_from=RISK_ST,values_from=count)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CA,x,75,FALSE)
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,75,FALSE,6.5)
+```
+
+**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CW,x,75,TRUE) 
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,75,FALSE,6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#1 record for CMP in CO having null for MIN_YEARS_LIC in olep
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,45)
+```
+
+```{r fig.width=11,fig.height=8.5}
+bar_grp_nopoint_noline_st(quote_dat_CW,x,90,1) 
+bar_grp_nopoint_noline_st(quote_dat_CW,x,90,2) 
+```
+
+## Driver Max Age
+
+```{r}
+x <- "Drv_Max_Age_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CA,x,75,FALSE)
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,45,FALSE,6.5)
+```
+
+**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CW,x,75,TRUE) 
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,75,FALSE,6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#1 record for CMP in CO having null for MAX_AGE in olep
+LR_graph(olep_dat_CW %>% filter(!is.na(Drv_Max_Age_grp)),x,45)
+```
+
+```{r fig.width=11,fig.height=8.5}
+bar_grp_nopoint_noline_st(quote_dat_CW,x,90,1) 
+bar_grp_nopoint_noline_st(quote_dat_CW,x,90,2) 
+```
+
+## Age of PNI
+
+```{r}
+x <- "PNI_Age_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CA,x,75,FALSE)
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]])),CA,2,x,1,"",FALSE,45,FALSE,6.5)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]])),x,45)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CW,x,75,TRUE) 
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,75,FALSE,6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#1 record for CMP in CO having null for MAX_AGE in olep
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,45)
+```
+
+```{r fig.width=11,fig.height=8.5}
+bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,1) 
+bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,2) 
+```
+
+## Gender of PNI
+
+```{r}
+x <- "Gender_Of_PNI"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CA,x,75,FALSE)
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]]),!.data[[x]]%in%c('N','U')),CA,2,x,1,"",FALSE,0,FALSE,1.5)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]]),!.data[[x]]%in%c('N','U',' ')),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CW,x,75,TRUE) 
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,0,FALSE,1.6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]]),!.data[[x]]%in%c('N','U')),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,1) 
+# bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,2) 
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),1,x,0,2,1.5)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),2,x,0,2,1.5)
+```
+
+## Marital Status of PNI
+
+```{r}
+x <- "Marital_Status_Of_PNI"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CA,x,75,FALSE)
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]]),.data[[x]]!=""),CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(.data[[x]]%in%c('D','M','P_CC','S','W')),
+         # %>% filter(!is.na(.data[[x]]),.data[[x]]!=" "),
+         x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+# bar_grp_nopoint_noline_ca_cw(quote_dat_CW,x,75,TRUE) 
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,0,FALSE,1.6)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#1 record for CMP in CO having null for MAX_AGE in olep
+LR_graph(olep_dat_CW %>% filter(.data[[x]]%in%c('D','M','P_CC','S','W')),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,1) 
+# bar_grp_nopoint_noline_st(quote_dat_CW %>% filter(!is.na(.data[[x]])),x,90,2) 
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]]),.data[[x]]!=" "),1,x,45,2,1.5)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]]),.data[[x]]!=" "),2,x,45,2,1.5)
+```
+
+## Rate Level
+
+```{r}
+x <- "RateLevel_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+
+#observations:
+#group_rate_level_code in olep can be NULL for records are not YET renewed in GW, but should not be too many. In future years, there should be NO records with NULL rate level
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,45,FALSE,2.5)
+```
+
+```{r fig.width=11,fig.height=5}
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]])),x,45)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,25,FALSE,1.5)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,1) 
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,2) 
+
+Quote_graph(quote_dat_CW,1,x,90,2,2)
+Quote_graph(quote_dat_CW,2,x,90,2,2)
+```
+
+## Persistency
+
+```{r}
+x <- "Persistency_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+
+```
+
+```{r fig.width= 11, fig.height=2.6,eval=FALSE}
+#CA doesn't have portable persistency like other states. CA's persistency years are the renewal years with CC
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,3.4)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW,x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1) 
+bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2) 
+
+# Quote_graph(quote_dat_CW,1,x,0,2,2)
+# Quote_graph(quote_dat_CW,2,x,0,2,2)
+```
+
+## Residence Type
+
+```{r}
+x <- "Residence_Type"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,25,FALSE,2)
+```
+**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,25)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,25,FALSE,1.55)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(.data[[x]]%in%c('Owned_Condo','Owned_SingleFamily','Rental_MultiUnit','Rental_SingleFamily','Unknown')),x,25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,1) 
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,2) 
+
+Quote_graph(quote_dat_CW,1,x,45,2,2)
+Quote_graph(quote_dat_CW,2,x,45,2,2)
+```
+
+## Paperless Discount
+
+```{r}
+x <- "PaperLess"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW,x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,0,2,1)
+Quote_graph(quote_dat_CW,2,x,0,2,1)
+```
+
+## Payment Plan
+
+```{r}
+x <- "PaymentPlan"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.2)
+```
+
+```{r fig.width=11,fig.height=5}
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1.23)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,1) 
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,45,2) 
+
+Quote_graph(quote_dat_CW,1,x,25,2,1.2)
+Quote_graph(quote_dat_CW,2,x,25,2,1.2)
+```
+
+## Auto/Home Discount
+
+```{r}
+x <- "AutoHome_Discount"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(!.data[[x]]%in%c('DP3_2ND','HO3_MH','HO6_2ND')),x,25)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(!.data[[x]]%in%c('DP3_2ND','HO3_MH','HO6_2ND')),x,25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,45,2,2)
+Quote_graph(quote_dat_CW,2,x,45,2,2)
+```
+
+## Insurance Score
+
+```{r}
+x <- "IS_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6, eval=FALSE}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there's NO loss ratio data**
+LR_graph(olep_dat_CA,x,25)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+#NA is due to conversion since there are ins_score = 0 & null
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]]),!.data[[x]] %in% c(1,2,3)),CW,2,x,1,"",FALSE,25,FALSE,5)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#NA is due to conversion since there are ins_score = 0 in MD and in NJ (18 records)
+LR_graph(olep_dat_CW %>% filter(!is.na(.data[[x]]),!.data[[x]] %in% c(1,2,3)),x,25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]]),!.data[[x]] %in% c(1,2,3)),1,x,45,2,3.3)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]]),!.data[[x]] %in% c(1,2,3)),2,x,45,2,3.3)
+```
+
+
+
+
+
+
+
+
+
+## Gold Star Level
+
+```{r}
+x <- "GoldStar_Level"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.25)
+```
+
+```{r fig.width=11,fig.height=5}
+#16 records has no GS level
+LR_graph(olep_dat_CA %>% filter(!is.na(.data[[x]])),x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5.1}
+olep_dat_CW <- olep_dat_CW %>% mutate(GoldStar_Level=case_when(GoldStar_Level %in% c('002',"Gold Star") ~ "2",
+                                                GoldStar_Level %in% c('003',"Standard") ~ "3",
+                                                TRUE~"P"))
+LR_graph(olep_dat_CW,x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,0,2,2)
+Quote_graph(quote_dat_CW,2,x,0,2,2)
+```
+
+## New Business Discount
+
+```{r}
+x <- "NewBusiness_Discount_Level"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI"F,F)
+```
+
+
+```{r fig.width= 11, fig.height=2.6,eval=FALSE}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.25)
+```
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW %>% filter(.data[[x]]!=""),CW,2,x,1,"",FALSE,0,FALSE,3)
+```
+
+```{r fig.width=11,fig.height=5.1}
+#the existing Legacy get " " for NPD level
+LR_graph(olep_dat_CW %>% filter(.data[[x]]!=" "),x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=""),1,x,0,2,2)
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=""),2,x,0,2,2)
+```
+
+
+## Package Discount
+
+```{r}
+x <- "Package_Discount"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI")
+```
+
+
+```{r fig.width= 11, fig.height=2.6}
+quote_dat_CA <- quote_dat_CA %>% mutate(Package_Discount=case_when(Package_Discount==""~"N",TRUE~Package_Discount))
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,1.5)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA,x,0)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+quote_dat_CW <- quote_dat_CW %>% mutate(Package_Discount=case_when(Package_Discount==""~"N",TRUE~Package_Discount))
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,1.5)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW,x,0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,0,2,2)
+Quote_graph(quote_dat_CW,2,x,0,2,2)
+```
+
+
+
+
+
+
+
+
+
+## Current Carrier BI Limit
+
+```{r}
+x <- "Current_Carrier_BI_Limit"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+quote_dat %>% group_by(CA_nonCA,Current_Carrier_BI_Limit) %>% summarise(n())
+```
+
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]])),CA,2,x,1,"",FALSE,25,FALSE,2)
+```
+**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA,x,25)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(.data[[x]]!="n/a"),x,25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),1,x,75,2,2)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),2,x,75,2,2)
+```
+
+
+# Graphs: Coverage Limit/Deductible
+
+## BI Limit
+
+```{r}
+x <- "BI_Limit"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,BI_Limit) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD=="BI") %>% group_by(CA_nonCA,BI_Limit) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA %>% filter(.data[[x]]!=""),CA,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_CA %>% filter(!is.na(.data[[x]]),.data[[x]]!="50-300"),x,'BI',25)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW %>% filter(.data[[x]]!=""),CW,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph_cov(olep_dat_CW %>% filter(!is.na(.data[[x]])),x,'BI',25)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=""),1,x,75,2,2)
+Quote_graph(quote_dat_CW %>% filter(.data[[x]]!=""),2,x,75,2,2)
+```
+
+## PD Limit
+
+```{r}
+x <- "PD_Limit"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA %>% filter(!is.na(.data[[x]])),CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_CA %>% filter(!is.na(.data[[x]]),.data[[x]] %in% c(25,50,100)),x,'PD',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_CW %>% filter(!is.na(.data[[x]]),.data[[x]] %in% c(25,50,100)),x,'PD',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),1,x,0,2,2)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),2,x,25,2,2)
+```
+
+## MED Limit
+
+```{r}
+x <- "MED_Limit"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_um_CA %>% filter(!is.na(.data[[x]])),x,'MP',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_um_CW %>% filter(!is.na(.data[[x]]),!.data[[x]]%in%c('50K','100K')),x,'MP',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,0,2,1)
+Quote_graph(quote_dat_CW,2,x,0,2,1)
+```
+
+## UMB Limit
+
+```{r}
+x <- "UMB_Limit"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,25,FALSE,2.5)
+```
+
+```{r fig.width=11,fig.height=4}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_um_CA %>% filter(!.data[[x]] %in% c('50-30','50-300','15-300','500/1M','1M/1M'),!is.na(.data[[x]])),x,'UMB',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,25,FALSE,2.2)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_um_CW %>% filter(!.data[[x]] %in% c('300/500','500/500','500/1M','1M/1M'),!is.na(.data[[x]])),x,'UMB',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),1,x,45,2,2)
+Quote_graph(quote_dat_CW %>% filter(!is.na(.data[[x]])),2,x,45,2,2)
+```
+
+## UIM Limit
+
+```{r}
+x <- "UIM_Limit"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6,eval=FALSE}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4,eval=FALSE}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_um_CA %>% filter(!is.na(.data[[x]])),x,'UIM',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW,CW,2,x,1,"",FALSE,25,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_um_CW %>% filter(!.data[[x]] %in% c('300/500','500/500','500/1M','1M/1M'),!is.na(.data[[x]])),x,'UIM',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,45,2,2)
+Quote_graph(quote_dat_CW,2,x,45,2,2)
+```
+
+## COMP Deductible
+
+```{r}
+x <- "COMP_Deductible"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,0,FALSE,2.4)
+```
+
+```{r fig.width=11,fig.height=4}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_CA %>%
+               filter(!is.na(.data[[x]])),x,'CMP',0)
+               # filter(.data[[x]]<=1000,!is.na(.data[[x]])),x,'CMP',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all,CW,2,x,1,"",FALSE,0,FALSE,2.4)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_CW %>%
+               filter(!is.na(.data[[x]])),x,'CMP',0)
+               # filter(.data[[x]]<=1000,!is.na(.data[[x]])),x,'CMP',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,45,2,2)
+Quote_graph(quote_dat_CW,2,x,45,2,2)
+```
+
+## COLL Deductible
+
+```{r}
+x <- "COLL_Deductible"
+```
+
+```{r eval=FALSE}
+# check_fun(x,"BI",T,F,F)
+quote_dat %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n()) 
+olep_dat %>% filter(COVERAGE_CD==.data[[x]]) %>% group_by(CA_nonCA,.data[[x]]) %>% summarise(n())
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph_cov(olep_dat_CA,x,'COL',0)
+# LR_graph_cov(olep_dat_CA %>% filter(250<=.data[[x]]<=1000),x,'COL',0)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all,CW,2,x,1,"",FALSE,0,FALSE,2)
+```
+
+```{r fig.width=11,fig.height=4.1}
+LR_graph_cov(olep_dat_CW,x,'COL',0)
+# LR_graph_cov(olep_dat_CW %>% filter(250<=.data[[x]]<=1000),x,'COL',0)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,45,2,2)
+Quote_graph(quote_dat_CW,2,x,45,2,2)
+```
+
+
+# Graphs: vehicle-level variables
+
+## Annual Mileage
+
+```{r}
+x <- "AnnualMileage_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA_all %>% filter(!is.na(.data[[x]])),CA,2,x,1,"",FALSE,45,FALSE,5)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(.data[[x]]!=0),x,45)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,45,FALSE,5)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(.data[[x]]!=0),x,45)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),1,x,90,2,5)
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),2,x,90,2,5)
+```
+
+## Model Year
+
+```{r}
+x <- "ModelYr_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,90,FALSE,10)
+```
+
+```{r fig.width=11,fig.height=5}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(.data[[x]]!=0),x,90)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,90,FALSE,10)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(.data[[x]]!=0),x,90)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),1,x,90,2,9)
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),2,x,90,2,9)
+```
+
+## Vehicle History Score
+
+```{r}
+x <- "VHS_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=2.6,eval=FALSE}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,90,FALSE,10)
+```
+
+```{r fig.width=11,fig.height=5,eval=FALSE}
+#**This variable is calculated/collected in PC but is not a rating element for CA rating plan. Thus, there’s NO loss ratio data**
+LR_graph(olep_dat_CA %>% filter(.data[[x]]!=0),x,90)
+```
+
+```{r fig.width= 11, fig.height=2.6}
+bar_grp_cw(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,45,FALSE,2.5)
+```
+
+```{r fig.width=11,fig.height=5.1}
+LR_graph(olep_dat_CW %>% filter(.data[[x]]!=0),x,90)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),1,x,90,2,9)
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),2,x,90,2,9)
+```
+
+# Graphs: Other variables
+
+## Vehicle Make
+
+```{r}
+x <- "Veh_Make_grp"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,45,FALSE,5)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,45,FALSE,6)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),1,x,90,2,5)
+Quote_graph(quote_dat_CW_all %>% filter(!is.na(.data[[x]])),2,x,90,2,5)
+```
+
+## Carfax ordered Indicator
+
+```{r}
+x <- "MLG_CARFAX_ORDERED_IND"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all %>% filter(.data[[x]]!=""),CA,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all %>% filter(.data[[x]]!=""),CW,2,x,1,"",FALSE,0,FALSE,1)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all %>% filter(.data[[x]]!=""),1,x,0,2,1)
+Quote_graph(quote_dat_CW_all %>% filter(.data[[x]]!=""),2,x,0,2,1)
+```
+
+## Number Of Drivers Under 26
+
+```{r}
+x <- "Number_Of_Drivers_Under26"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,0,FALSE,1.15)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all,CW,2,x,1,"",FALSE,0,FALSE,1.2)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all,1,x,0,2,1.15)
+Quote_graph(quote_dat_CW_all,2,x,0,2,1.15)
+```
+
+## Number Of Drivers Under 21
+
+```{r}
+x <- "Number_Of_Drivers_Under21"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA_all,CA,2,x,1,"",FALSE,0,FALSE,1.15)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW_all,CW,2,x,1,"",FALSE,0,FALSE,1.2)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW_all,1,x,0,2,1.15)
+Quote_graph(quote_dat_CW_all,2,x,0,2,1.15)
+```
+
+## Current Carrier (from LN)
+
+```{r}
+x <- "Current_Carrier_grp2"
+```
+
+```{r eval=FALSE}
+check_fun(x,"BI",F,F,F)
+```
+
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CA,CA,2,x,1,"",FALSE,45,FALSE,2)
+```
+
+```{r fig.width= 11, fig.height=3.6}
+bar_grp_cw(quote_dat_CW %>% filter(!is.na(.data[[x]])),CW,2,x,1,"",FALSE,45,FALSE,3)
+```
+
+```{r fig.width=11,fig.height=8.5}
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,1)
+# bar_grp_nopoint_noline_st(quote_dat_CW,x,0,2)
+
+Quote_graph(quote_dat_CW,1,x,90,2,2)
+Quote_graph(quote_dat_CW,2,x,90,2,3)
+```
+
+
+
+# Appendix
+
+n/a
+
